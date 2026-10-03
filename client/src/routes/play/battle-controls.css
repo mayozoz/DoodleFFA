@@ -1,0 +1,29 @@
+.battle-controls-shell { position: fixed; inset: 0; display: grid; grid-template-columns: 1fr 1fr; }
+/* The entire left half receives touch/mouse input; there is no resting visual. */
+.battle-stick-zone { position: relative; touch-action: none; }
+.battle-stick-zone:not(.is-active) .nipple { display: none !important; }
+.battle-stick-zone .back { background: #ffffff0d !important; border: 1px solid #ffffff40; opacity: 1 !important; }
+.battle-stick-zone .front { background: #ffffff80 !important; opacity: 1 !important; }
+.battle-attack-zone { display: grid; place-items: center; padding-right: env(safe-area-inset-right); }
+.battle-attack-frame { position: relative; width: clamp(84px, 24vmin, 120px); aspect-ratio: 1; }
+.battle-sword-button {
+  position: absolute; inset: 8%; width: 84%; height: 84%; padding: 0;
+  display: grid; place-items: center; border-radius: 50%; border: 1.5px solid #ffffffb3;
+  background: #ffffff08; color: #fff; touch-action: none;
+}
+.battle-sword { width: 52%; height: 52%; pointer-events: none; }
+.battle-sword-button:focus-visible { outline: 2px solid #fff; outline-offset: 5px; }
+.battle-sword-cooldown { position: absolute; inset: 0; width: 100%; height: 100%; rotate: -90deg; pointer-events: none; opacity: .6; }
+.battle-sword-cooldown #ring { stroke-linecap: round; }
+.battle-rotate-hint { display: none; }
+/* Mobile browsers cannot reliably force orientation, so request landscape in portrait. */
+@media (orientation: portrait) and (pointer: coarse) {
+  .battle-rotate-hint {
+    position: absolute; inset: 0; z-index: 10; display: flex; flex-direction: column;
+    justify-content: center; align-items: center; gap: 20px;
+    background: var(--bg); color: #fff; font-size: 17px; text-align: center;
+    padding: 24px; touch-action: none;
+  }
+  .battle-rotate-hint svg { width: 64px; height: 64px; fill: none; stroke: currentColor; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+}
+.battle-controls-shell #hp { pointer-events: none; }

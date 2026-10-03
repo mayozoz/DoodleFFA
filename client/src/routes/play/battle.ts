@@ -4,29 +4,42 @@ import { secondsLeft } from '../../net/clock';
 import { haptic } from '../../ui/haptics';
 import { click } from '../../audio/sfx';
 import type { View } from './types';
+import './battle-controls.css';
 
 const SEND_HZ = 20;
 
 /** Landscape: joystick left, signature button right (with cooldown ring), HP bar on top. */
 export const battleView: View = (ctx) => {
   ctx.el.innerHTML = `
-    <div style="position:fixed;inset:0;display:grid;grid-template-columns:1fr 1fr">
+    <div class="battle-controls-shell">
       <div id="hp" style="position:absolute;top:12px;left:50%;translate:-50%;width:40vw;height:14px;border-radius:7px;background:#0006;overflow:hidden">
         <div id="hpfill" style="height:100%;width:100%;background:var(--player)"></div>
       </div>
-      <div id="stick" style="position:relative"></div>
-      <div style="display:grid;place-items:center">
-        <button id="atk" style="position:relative;width:38vmin;height:38vmin;border-radius:50%;font-size:28px">
-          <svg viewBox="0 0 100 100" style="position:absolute;inset:-8px;width:calc(100% + 16px);height:calc(100% + 16px);rotate:-90deg">
-            <circle id="ring" cx="50" cy="50" r="48" fill="none" stroke="#fff" stroke-width="4" pathLength="1" stroke-dasharray="1" stroke-dashoffset="0"/>
+      <div id="stick" class="battle-stick-zone" aria-label="Movement area"></div>
+      <div class="battle-attack-zone">
+        <div class="battle-attack-frame">
+          <button id="atk" class="battle-sword-button" aria-label="Attack">
+            <svg class="battle-sword" viewBox="0 0 48 48" aria-hidden="true">
+              <path d="m19 28 5 5L39 18l2-11-11 2z" fill="currentColor"/>
+              <path d="m23 29 11-11" fill="none" stroke="#14121f" stroke-width="2" opacity=".25" stroke-linecap="round"/>
+              <path d="m15 25 13 13M12 36l8-8M9 39l3-3" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+          <svg class="battle-sword-cooldown" viewBox="0 0 100 100" aria-hidden="true">
+            <circle id="ring" cx="50" cy="50" r="47" fill="none" stroke="#fff" stroke-width="2" pathLength="1" stroke-dasharray="1" stroke-dashoffset="0"/>
           </svg>
-        </button>
+        </div>
+      </div>
+      <div class="battle-rotate-hint" role="status">
+        <svg viewBox="0 0 64 64" aria-hidden="true"><rect x="12" y="22" width="40" height="24" rx="5"/><path d="M16 12a24 24 0 0 1 34 5m0-9v9h-9"/></svg>
+        <span>Turn your phone sideways</span>
       </div>
     </div>`;
 
-  const player = ctx.conn.db.player.identity.find(ctx.identity);
-  const color = player ? getComputedStyle(document.documentElement).getPropertyValue('--player') : '#fff';
-  const stick = nipplejs.create({ zone: ctx.el.querySelector<HTMLElement>('#stick')!, mode: 'dynamic', color });
+  const zone = ctx.el.querySelector<HTMLElement>('#stick')!;
+  const stick = nipplejs.create({ zone, mode: 'dynamic', color: '#fff', size: 120, fadeTime: 0 });
+  stick.on('start', () => zone.classList.add('is-active'));
+  stick.on('end', () => zone.classList.remove('is-active'));
 
   // Send the direction vector only when it changes, max 20/s.
   let want = { dx: 0, dy: 0 };
