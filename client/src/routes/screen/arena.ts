@@ -3,7 +3,7 @@ import {
   ARCHETYPE_MODULES, Character, Character3D, Feedback, Interpolator, STAGE, Stage3D, StageGrid, Tweener,
   createWeaponSprite, drawMarker, loadCharacterAsset, loadCutout, motionFeel, type CharacterAsset,
 } from '@doodle/engine';
-import { DEFAULT_SWING, colorForSlot, type Marker, type Phase, type StoredWeapon } from '@doodle/spec';
+import { DEFAULT_SWING, MAX_HP, arenaExtents, colorForSlot, type Marker, type Phase, type StoredWeapon } from '@doodle/spec';
 import type { DbConnection } from '../../module_bindings';
 import { hexToNum } from '../../ui/theme';
 
@@ -103,7 +103,7 @@ export class Arena {
       const v = this.fighters.get(f.player.toHexString());
       if (!v) return;
       v.interp.push(f.x, f.y, f.facing);
-      v.char.setHp(f.hp / 100);
+      v.char.setHp(f.hp / MAX_HP);
       if (f.lastAttackAt.microsSinceUnixEpoch !== v.lastAttack) {
         v.lastAttack = f.lastAttackAt.microsSinceUnixEpoch;
         this.playAttack(v, f.facing);
@@ -215,9 +215,11 @@ export class Arena {
     const r = this.conn.db.room.code.find(this.code);
     if (!r) return;
 
-    // Fit the arena to the screen.
+    // Fit the screen-shaped arena rectangle to the screen (letterboxed if the aspect differs).
     const arenaR = r.arenaR || 10;
-    this.unit = Math.min(this.app.screen.width, this.app.screen.height) / (arenaR * 2.3);
+    const { hw, hh } = arenaExtents(arenaR);
+    const k = this.stage3d ? Stage3D.groundScaleY : 1;
+    this.unit = Math.min(this.app.screen.width / (2 * hw), this.app.screen.height / (2 * hh * k));
     this.world.position.set(this.app.screen.width / 2, this.app.screen.height / 2);
 
     if (this.stage3d) {
@@ -226,7 +228,7 @@ export class Arena {
     } else {
       this.grid.draw(this.app.screen.width / 2, this.app.screen.height / 2, this.unit);
     }
-    this.edge.clear().circle(0, 0, arenaR * this.unit).stroke({ color: 0x5a5a5a, width: 2, alpha: 0.6 });
+    this.edge.clear().rect(-hw * this.unit, -hh * this.unit, 2 * hw * this.unit, 2 * hh * this.unit).stroke({ color: 0x5a5a5a, width: 2, alpha: 0.6 });
     this.storm.clear();
     if (this.phase === 'battle') {
       this.storm.rect(-5000, -5000, 10000, 10000).fill({ color: 0x6b2bd9, alpha: 0.25 })
@@ -264,12 +266,14 @@ export class Arena {
     this.markers.removeChildren();
     if (this.phase !== 'drop' && this.phase !== 'reveal') return;
     const r = this.conn.db.room.code.find(this.code);
-    const arenaR = r?.arenaR || 10;
+    // Before battle the room has no arena size yet; preview with the size this many players will get.
+    const count = [...this.conn.db.player.iter()].filter((p) => p.roomCode === this.code).length;
+    const { hw, hh } = arenaExtents(r?.arenaR || 8 + 1.5 * count);
     for (const p of this.conn.db.player.iter()) {
       if (p.roomCode !== this.code || p.dropX < 0) continue;
       const g = new Graphics();
       const c = hexToNum(colorForSlot(p.colorSlot).hex);
-      drawMarker(g, p.marker as Marker, (p.dropX * 2 - 1) * arenaR * this.unit, (p.dropY * 2 - 1) * arenaR * this.unit, this.unit * 0.4, c);
+      drawMarker(g, p.marker as Marker, (p.dropX * 2 - 1) * (hw - 1) * this.unit, (p.dropY * 2 - 1) * (hh - 1) * this.unit, this.unit * 0.4, c);
       this.markers.addChild(g);
     }
   }

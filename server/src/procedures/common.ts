@@ -63,7 +63,14 @@ export function writeIfStillPending(ctx: PCtx, field: WeaponField, value: string
   });
 }
 
-/** Server-log only. Never include prompts or raw model output in anything clients can read. */
-export function logFail(what: string, err: unknown) {
-  console.warn(`[gen] ${what} failed: ${err instanceof Error ? err.message : String(err)}`);
+/**
+ * Log a failed generation step: server log + a short debug_event for the ?debug overlay.
+ * Never include prompts or raw model output in anything clients can read.
+ */
+export function logFail(ctx: PCtx, roomCode: string, what: string, err: unknown) {
+  const msg = err instanceof Error ? err.message : String(err);
+  console.warn(`[gen] ${what} failed: ${msg}`);
+  try {
+    ctx.withTx((tx) => tx.db.debugEvent.insert({ id: 0n, roomCode, source: what, message: `failed: ${msg}`.slice(0, 300), createdAt: tx.timestamp }));
+  } catch { /* never break the procedure over a debug row */ }
 }

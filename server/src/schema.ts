@@ -143,6 +143,21 @@ export const fxEvent = table(
   },
 );
 
+/**
+ * Server-side errors and stalls, for the client debug overlay (?debug). Messages are short and
+ * generic — never prompts or raw model output. tick() keeps ~10 minutes of history.
+ */
+export const debugEvent = table(
+  { name: 'debug_event', public: true },
+  {
+    id: t.u64().primaryKey().autoInc(),
+    roomCode: t.string().index('btree'),
+    source: t.string(), // 'tick' | 'gen_spec' | 'gen_sprite' | 'gen_sfx' | ...
+    message: t.string(),
+    createdAt: t.timestamp(),
+  },
+);
+
 /** Private schedule table driving tick(). One global row; tick() loops over active rooms. */
 export const tickSchedule = table(
   { name: 'tick_schedule' },
@@ -170,6 +185,6 @@ export const admin = table(
 );
 
 const spacetimedb = schema({
-  room, player, drawing, doodle, weapon, fighter, input, projectile, fxEvent, tickSchedule, secrets, admin,
+  room, player, drawing, doodle, weapon, fighter, input, projectile, fxEvent, debugEvent, tickSchedule, secrets, admin,
 });
 export default spacetimedb;

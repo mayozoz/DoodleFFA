@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { CAMERA_ELEVATION_DEG } from '@doodle/spec';
 import { STAGE } from '../stage';
 
 // Three.js layer under the Pixi canvas: floor grid + 3D characters.
@@ -9,7 +10,7 @@ import { STAGE } from '../stage';
 //   screenY = (y · sin(el) − h · cos(el)) · unit          (relative to the view center)
 // `toScreen()` is that formula; Pixi uses it to place weapons, tags and fx exactly over the 3D.
 
-export const CAMERA_ELEVATION = (55 * Math.PI) / 180;
+export const CAMERA_ELEVATION = (CAMERA_ELEVATION_DEG * Math.PI) / 180;
 
 export class Stage3D {
   readonly renderer: THREE.WebGLRenderer;

@@ -1,4 +1,4 @@
-import { hashString, mulberry32, rollDamage, type StoredWeapon } from '@doodle/spec';
+import { arenaExtents, hashString, mulberry32, rollDamage, stormStartRadius, type StoredWeapon } from '@doodle/spec';
 import { BALANCE, GAME } from '../balance';
 import { addSeconds, secondsBetween } from './time';
 import { readWeapon } from './weapons';
@@ -21,7 +21,9 @@ export function stepBattle(ctx: Ctx, r: RoomRow, dt: number) {
     weapons.set(id, readWeapon(ctx.db.weapon.player.find(f.player)));
   }
 
-  // 1. Movement
+  // 1. Movement (clamped to the screen-shaped arena rectangle)
+  const { hw, hh } = arenaExtents(r.arenaR);
+  const mx = hw - GAME.hitRadius, my = hh - GAME.hitRadius;
   for (const [id, f] of fighters) {
     const input = ctx.db.input.player.find(f.player);
     if (!input) continue;
@@ -29,8 +31,8 @@ export function stepBattle(ctx: Ctx, r: RoomRow, dt: number) {
     f.x += input.dx * speed * dt;
     f.y += input.dy * speed * dt;
     if (input.dx !== 0 || input.dy !== 0) f.facing = Math.atan2(input.dy, input.dx);
-    const len = Math.hypot(f.x, f.y);
-    if (len > r.arenaR) { f.x *= r.arenaR / len; f.y *= r.arenaR / len; }
+    f.x = Math.max(-mx, Math.min(mx, f.x));
+    f.y = Math.max(-my, Math.min(my, f.y));
   }
 
   // 2. Attacks (one buffered press, fires when cooldown is ready)
@@ -77,9 +79,11 @@ export function stepBattle(ctx: Ctx, r: RoomRow, dt: number) {
   ctx.db.room.code.update(roomUpdate);
 }
 
+/** Starts at the circle through the arena corners (all safe), ends at a fraction of the half-width. */
 export function stormRadius(r: RoomRow, elapsed: number): number {
   const t = Math.min(1, Math.max(0, (elapsed - GAME.stormStartS) / (GAME.suddenDeathS - GAME.stormStartS)));
-  return r.arenaR * (1 - t * (1 - GAME.stormEndRadiusFrac));
+  const start = stormStartRadius(r.arenaR), end = r.arenaR * GAME.stormEndRadiusFrac;
+  return start + (end - start) * t;
 }
 
 /** Nearest enemy within ~90° of facing; else nearest overall. */

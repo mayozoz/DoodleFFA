@@ -1,12 +1,14 @@
-import type { BalanceConfig } from '@doodle/spec';
+import { MAX_HP, type BalanceConfig } from '@doodle/spec';
 
 // ──────────────────────────────────────────────────────────────────────────
 //  THE tuning file. Every gameplay number that playtesting might change lives
 //  here. The formula itself is in packages/spec/src/balance.ts.
 // ──────────────────────────────────────────────────────────────────────────
 
+// HP scale: 5000 HP (MAX_HP in packages/spec/src/arena.ts). Everything that deals damage is
+// scaled ×50 from the original 100-HP tuning, so fights last as long but numbers hit harder.
 export const BALANCE: BalanceConfig = {
-  targetDps: 12,
+  targetDps: 600,
   cooldownMin: 0.25,
   cooldownMax: 1.5,
   baseCooldown: {
@@ -33,18 +35,18 @@ export const BALANCE: BalanceConfig = {
 /** Character + arena constants (world units; 1 unit ≈ one character diameter). */
 export const GAME = {
   tickHz: 20,
-  maxHp: 100,
+  maxHp: MAX_HP,
   hitRadius: 0.5,
   moveSpeed: 5, // units / s
-  /** arena radius = base + perPlayer × n */
+  /** arena half-width = base + perPlayer × n; half-height follows the screen aspect (arenaExtents) */
   arenaBaseRadius: 8,
   arenaPerPlayer: 1.5,
   stormStartS: 10,
   stormEndRadiusFrac: 0.15,
-  stormDps: 5,
+  stormDps: 250,
   suddenDeathS: 50,
-  suddenDeathDpsStart: 5,
-  suddenDeathDpsPerS: 4,
+  suddenDeathDpsStart: 250,
+  suddenDeathDpsPerS: 200,
   fxEventTtlMs: 1000,
 } as const;
 

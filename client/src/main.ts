@@ -1,4 +1,7 @@
 import './style.css';
+import { debug } from './debug';
+
+debug.mount(); // no-op unless ?debug / VITE_DEBUG=1
 
 // Tiny path router — one app, two player-facing views plus the dev playground.
 const routes: Record<string, () => Promise<{ mount(el: HTMLElement): void }>> = {

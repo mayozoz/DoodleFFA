@@ -1,11 +1,12 @@
 import { extractFeatures, type Drawing, type Stroke } from '@doodle/spec';
 import { mountCountdown } from '../../ui/countdown';
+import { debug } from '../../debug';
 import type { View } from './types';
 
 const COLORS = ['#111111', '#ff3b3b', '#2f6bff', '#22c55e'];
 const SIZE = 512; // canvas resolution sent to the server
 /** M3: flip on to kick off the hidden generation procedures after submit. */
-const RUN_GENERATION = false;
+export const RUN_GENERATION = false;
 
 /** 20 s doodle canvas: 4 colors + undo, border in player color. Submits when the phase ends. */
 export const drawView: View = (ctx) => {
@@ -66,16 +67,17 @@ export const drawView: View = (ctx) => {
     submitted = true;
     const blob = await new Promise<Blob | null>((r) => canvas.toBlob(r, 'image/png'));
     const png = new Uint8Array(await (blob ?? new Blob()).arrayBuffer());
-    await ctx.conn.reducers.submitDrawing({
+    await debug.track('submit_drawing', ctx.conn.reducers.submitDrawing({
       strokes: JSON.stringify(drawing),
       png,
       features: JSON.stringify(extractFeatures(drawing)),
-    });
+    }));
     if (RUN_GENERATION) {
-      // Fire-and-forget, in parallel. Results land in the weapon row; nothing is shown here.
-      void ctx.conn.procedures.genSpec({}).catch(() => {});
-      void ctx.conn.procedures.genSprite({}).catch(() => {});
-      void ctx.conn.procedures.genSfx({}).catch(() => {});
+      // Fire-and-forget, in parallel. Results land in the weapon row; nothing is shown to players
+      // (only the ?debug overlay lists them while they run).
+      void debug.track('gen_spec', ctx.conn.procedures.genSpec({})).catch(() => {});
+      void debug.track('gen_sprite', ctx.conn.procedures.genSprite({})).catch(() => {});
+      void debug.track('gen_sfx', ctx.conn.procedures.genSfx({})).catch(() => {});
     }
   };
 

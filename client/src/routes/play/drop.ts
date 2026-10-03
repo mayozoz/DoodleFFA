@@ -1,13 +1,13 @@
 import { mountCountdown } from '../../ui/countdown';
 import type { View } from './types';
 
-/** Tap the mini-arena to choose a spawn. Re-tap allowed until the phase ends. */
+/** Tap the mini-arena (same 16:9 shape as the shared screen) to choose a spawn. Re-tap allowed. */
 export const dropView: View = (ctx) => {
   ctx.el.innerHTML = `
     <div class="center">
       <div id="cd"></div>
       <h2>Tap where to drop in</h2>
-      <div id="arena" style="position:relative;width:min(80vw,60dvh);aspect-ratio:1;border-radius:50%;background:#2a2640;border:4px solid var(--player)">
+      <div id="arena" style="position:relative;width:min(90vw,95dvh);aspect-ratio:16/9;border-radius:10px;background:#262626;border:4px solid var(--player)">
         <div id="pin" style="position:absolute;width:28px;height:28px;margin:-14px;border-radius:50%;background:var(--player);display:none"></div>
       </div>
     </div>`;

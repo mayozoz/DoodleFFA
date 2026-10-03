@@ -4,6 +4,7 @@ import { isAfterOrEqual } from '../lib/time';
 import { advancePhase } from '../lib/phases';
 import { cleanupFx, stepBattle } from '../lib/sim';
 import { GAME } from '../balance';
+import { cleanupDebug, debugEvent, errMessage } from '../lib/debug';
 
 /**
  * 20 Hz global tick (see GAME.tickHz). For every non-lobby room:
@@ -20,12 +21,19 @@ export const tick = spacetimedb.reducer(
     const dt = 1 / GAME.tickHz;
     for (const r of [...ctx.db.room.iter()]) {
       if (r.phase === 'lobby') continue;
-      if (isAfterOrEqual(ctx.timestamp, r.phaseEndsAt)) {
-        advancePhase(ctx, r);
-        continue;
+      // Isolate rooms: one room's bug must not freeze every other room (they share this tick).
+      try {
+        if (isAfterOrEqual(ctx.timestamp, r.phaseEndsAt)) {
+          advancePhase(ctx, r);
+          continue;
+        }
+        if (r.phase === 'battle') stepBattle(ctx, r, dt);
+        cleanupFx(ctx, r.code);
+        cleanupDebug(ctx, r.code);
+      } catch (e) {
+        console.error(`[tick] room ${r.code} (${r.phase}): ${errMessage(e)}`);
+        debugEvent(ctx, r.code, 'tick', `${r.phase}: ${errMessage(e)}`);
       }
-      if (r.phase === 'battle') stepBattle(ctx, r, dt);
-      cleanupFx(ctx, r.code);
     }
   },
 );

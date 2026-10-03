@@ -32,7 +32,7 @@ export const genSfx = spacetimedb.procedure(t.unit(), (ctx) => {
     const url = s3Put(ctx, s3, `sfx/${job.roomCode}/${job.playerHex}.mp3`, res.bytes(), 'audio/mpeg');
     writeIfStillPending(ctx, 'sfxUrl', url);
   } catch (e) {
-    logFail('gen_sfx', e);
+    logFail(ctx, job.roomCode, 'gen_sfx', e);
   }
   return {};
 });

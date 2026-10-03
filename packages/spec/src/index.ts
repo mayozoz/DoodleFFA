@@ -6,3 +6,4 @@ export * from './validate';
 export * from './balance';
 export * from './features';
 export * from './fallback';
+export * from './arena';

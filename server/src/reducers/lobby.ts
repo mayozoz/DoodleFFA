@@ -3,6 +3,7 @@ import { MAX_PLAYERS, colorForSlot, nextFreeColorSlot } from '@doodle/spec';
 import spacetimedb from '../schema';
 import { makeRoomCode } from '../lib/room-code';
 import { enterPhase } from '../lib/phases';
+import { clearPlayerRoundRows } from '../lib/player-rows';
 
 /**
  * Shared screen creates a room. (Not in the brief's reducer list, but someone has to
@@ -10,8 +11,9 @@ import { enterPhase } from '../lib/phases';
  * subscribing to `room WHERE host = <its identity>`.
  */
 export const createRoom = spacetimedb.reducer((ctx) => {
-  // Close any previous room this screen hosted so codes don't pile up.
-  for (const r of ctx.db.room.iter()) if (r.host.isEqual(ctx.sender)) ctx.db.room.code.delete(r.code);
+  // A screen keeps its room across reloads, so phones holding the code/QR never get
+  // "room not found". (The client also skips this call when it already sees its room.)
+  for (const r of ctx.db.room.iter()) if (r.host.isEqual(ctx.sender)) return;
 
   let code = makeRoomCode(ctx.random);
   while (ctx.db.room.code.find(code)) code = makeRoomCode(ctx.random);
@@ -61,6 +63,7 @@ export const joinRoom = spacetimedb.reducer(
     }
     const slot = nextFreeColorSlot(players.map((p) => p.colorSlot));
     const color = colorForSlot(slot);
+    clearPlayerRoundRows(ctx, ctx.sender); // leftovers from a previous room
 
     ctx.db.player.insert({
       identity: ctx.sender,

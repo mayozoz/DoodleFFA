@@ -44,7 +44,7 @@ export const genSprite = spacetimedb.procedure(t.unit(), (ctx) => {
     const url = s3Put(ctx, s3, `sprites/${job.roomCode}/${job.playerHex}-${Number(ctx.timestamp.microsSinceUnixEpoch % 1_000_000n)}.png`, png, 'image/png');
     writeIfStillPending(ctx, 'spriteUrl', url);
   } catch (e) {
-    logFail('gen_sprite', e);
+    logFail(ctx, job.roomCode, 'gen_sprite', e);
   }
   return {};
 });

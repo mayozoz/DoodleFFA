@@ -35,7 +35,7 @@ export const genSpec = spacetimedb.procedure(t.unit(), (ctx) => {
     console.info(`[gen] spec ${SPEC_PROVIDER}/${SPEC_PROMPT_VERSION} ${job.playerHex.slice(0, 8)}: ${elapsed.toFixed(1)}s, ${issues.length} field(s) fixed`);
     writeIfStillPending(ctx, 'spec', storeWeapon(spec), true);
   } catch (e) {
-    logFail(`gen_spec (${SPEC_PROVIDER})`, e);
+    logFail(ctx, job.roomCode, `gen_spec (${SPEC_PROVIDER})`, e);
   }
   return {};
 });

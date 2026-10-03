@@ -9,6 +9,7 @@ import { dropView } from './drop';
 import { battleView } from './battle';
 import { waitingView } from './waiting';
 import { resultsView } from './results';
+import { mountPlayDebug } from './debug-status';
 
 // Controller (/play). Subscribes to its room, the room's players, and its own
 // fighter + weapon rows only, and
@@ -27,6 +28,7 @@ export async function mount(el: HTMLElement) {
   const { conn, identity } = await connect('play');
   const me = identity.toHexString();
   const ctx: PlayCtx = { conn, identity, el, roomCode: '' };
+  mountPlayDebug(ctx);
 
   let current: { phase: Phase; cleanup: () => void } | null = null;
   const show = (phase: Phase) => {

@@ -1,7 +1,8 @@
-import { mulberry32, type Phase } from '@doodle/spec';
+import { arenaExtents, mulberry32, stormStartRadius, type Phase } from '@doodle/spec';
 import { GAME, PHASE_SECONDS } from '../balance';
 import { addSeconds } from './time';
 import { applyFallbacks } from './weapons';
+import { clearPlayerRoundRows } from './player-rows';
 import type { Ctx, RoomRow } from './ctx';
 
 const NEXT: Record<Phase, Phase> = {
@@ -36,7 +37,7 @@ export function enterPhase(ctx: Ctx, r: RoomRow, phase: Phase) {
 function resetRound(ctx: Ctx, code: string) {
   for (const p of ctx.db.player.roomCode.filter(code)) {
     ctx.db.player.identity.update({ ...p, alive: true, dropX: -1, dropY: -1, placement: 0 });
-    ctx.db.input.player.delete(p.identity);
+    clearPlayerRoundRows(ctx, p.identity); // also wipes leftovers this identity has in other rooms
   }
   ctx.db.drawing.roomCode.delete(code);
   ctx.db.doodle.roomCode.delete(code);
@@ -46,24 +47,27 @@ function resetRound(ctx: Ctx, code: string) {
   ctx.db.fxEvent.roomCode.delete(code);
 }
 
-/** Arena + storm scale with player count. Fighters spawn at their drop (or a seeded random spot). */
+/**
+ * Arena (screen-shaped rectangle) scales with player count; the storm starts around its corners.
+ * Fighters spawn at their drop (or a seeded random spot).
+ */
 function spawnFighters(ctx: Ctx, r: RoomRow): Partial<RoomRow> {
   const players = [...ctx.db.player.roomCode.filter(r.code)];
   const arenaR = GAME.arenaBaseRadius + GAME.arenaPerPlayer * players.length;
+  const { hw, hh } = arenaExtents(arenaR);
   const rand = mulberry32(r.seed);
   for (const p of players) {
     let nx = p.dropX, ny = p.dropY;
     if (nx < 0 || ny < 0) { nx = rand(); ny = rand(); }
-    // Map the unit square onto the arena disc.
-    let x = (nx * 2 - 1) * arenaR, y = (ny * 2 - 1) * arenaR;
-    const len = Math.hypot(x, y), max = arenaR - 1;
-    if (len > max) { x *= max / len; y *= max / len; }
+    // The drop picker is the same rectangle, so this is a straight linear map (1 unit margin).
+    const x = (nx * 2 - 1) * (hw - 1), y = (ny * 2 - 1) * (hh - 1);
+    ctx.db.fighter.player.delete(p.identity); // never collide with a stale row
     ctx.db.fighter.insert({
       player: p.identity, roomCode: r.code, x, y, facing: 0, hp: GAME.maxHp,
       cooldownReadyAt: ctx.timestamp, lastAttackAt: ctx.timestamp, effects: '{}',
     });
   }
-  return { arenaR, stormX: 0, stormY: 0, stormR: arenaR };
+  return { arenaR, stormX: 0, stormY: 0, stormR: stormStartRadius(arenaR) };
 }
 
 /** Assign placements to survivors and pick the winner (highest HP% on a tie). */

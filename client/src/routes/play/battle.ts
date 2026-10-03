@@ -1,5 +1,5 @@
 import nipplejs from 'nipplejs';
-import type { StoredWeapon } from '@doodle/spec';
+import { MAX_HP, type StoredWeapon } from '@doodle/spec';
 import { secondsLeft } from '../../net/clock';
 import { haptic } from '../../ui/haptics';
 import { click } from '../../audio/sfx';
@@ -60,7 +60,7 @@ export const battleView: View = (ctx) => {
     const f = ctx.conn.db.fighter.player.find(ctx.identity);
     const w = ctx.conn.db.weapon.player.find(ctx.identity);
     if (f) {
-      hpFill.style.width = `${Math.max(0, f.hp)}%`;
+      hpFill.style.width = `${Math.max(0, (f.hp / MAX_HP) * 100)}%`;
       const cd = w?.spec ? (JSON.parse(w.spec) as StoredWeapon).stats.cooldown : 0.6;
       const left = secondsLeft(f.cooldownReadyAt);
       ring.style.strokeDashoffset = String(Math.min(1, left / cd));

@@ -205,6 +205,18 @@ The load test checks that the 20 Hz tick holds with 12 clients on Maincloud. If 
 - `burn` and `poison`/`fire` move `dotShare` of the budget into DoT, so the total stays at 12 DPS.
 - The test `never exceeds the target DPS budget` is the guardrail. Keep it passing.
 
+### Debug overlay (`?debug`)
+- Add `?debug` to any URL (`/screen?debug`, `/play?debug`) to turn it on for that device. It stays on (saved in `localStorage`) until you visit with `?debug=0`. Set `VITE_DEBUG=1` in `.env` to turn it on for every device.
+- **Off by default**, so players never see it.
+- **Errors it shows:** client exceptions, failed reducer and procedure calls, connection drops, and server-side problems from the public `debug_event` table. The server writes that table from per-room `tick()` failures and failed `gen_*` steps, with short messages only (never prompts or raw model output).
+- **Waits it shows:**
+  - the phase countdown, and phases that are **overdue** ("server is NOT advancing")
+  - drawings received per player
+  - each player's weapon status (`spec ✓ sprite … sfx …`)
+  - generation calls in flight, with elapsed time
+  - a **stalled tick** during battle (no fighter updates for over 1 s)
+- Per-room isolation: `tick()` runs each room in its own `try/catch`. One room's error is logged and the other rooms keep running. (Before this, a stale fighter row in one room froze every room.)
+
 ### 3D character
 - **Pipeline:** Mixamo FBX files in `assets-src/character/` are built into `client/public/models/character/character.glb` by `pnpm character:build`, which runs headless Blender.
   - It keeps one armature and the mesh, names the clips (`stickman_run.fbx` → `Run`), and strips forward root motion.

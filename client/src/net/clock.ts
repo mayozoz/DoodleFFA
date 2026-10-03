@@ -10,6 +10,11 @@ export function syncFromPhaseStart(phaseStartedAt: Timestamp) {
   offsetMs = Date.now() - Number(phaseStartedAt.toMillis());
 }
 
+/** How long ago the phase should have ended (0 if it hasn't). Debug: detects a stalled server. */
+export function secondsOverdue(phaseEndsAt: Timestamp): number {
+  return Math.max(0, (Date.now() - (Number(phaseEndsAt.toMillis()) + offsetMs)) / 1000);
+}
+
 export function secondsLeft(phaseEndsAt: Timestamp): number {
   const endLocal = Number(phaseEndsAt.toMillis()) + offsetMs;
   return Math.max(0, (endLocal - Date.now()) / 1000);

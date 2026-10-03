@@ -5,6 +5,7 @@ import { mountCountdown } from '../../ui/countdown';
 import { Arena } from './arena';
 import { lobbyOverlay } from './lobby';
 import { resultsOverlay } from './results';
+import { mountScreenDebug } from './debug-status';
 
 // Shared screen (/screen). Creates a room, subscribes to everything public for it, and
 // renders. It never simulates — positions come from `fighter` rows, ~100 ms behind.
@@ -44,10 +45,11 @@ export async function mount(el: HTMLElement) {
     }
   };
 
-  // Find (or wait for) the room this screen hosts.
-  conn.db.room.onInsert((_c, r) => {
-    if (!r.host.isEqual(identity) || code) return;
-    code = r.code;
+  // Use the room this screen already hosts (it survives reloads); only create one if there's none.
+  const useRoom = (roomCode: string) => {
+    if (code) return;
+    code = roomCode;
+    mountScreenDebug(conn, code);
     arena.setRoom(code);
     conn.subscriptionBuilder().onApplied(render).subscribe([
       `SELECT * FROM player WHERE room_code = '${code}'`,
@@ -58,10 +60,15 @@ export async function mount(el: HTMLElement) {
       `SELECT * FROM fx_event WHERE room_code = '${code}'`,
     ]);
     render();
-  });
+  };
+  conn.db.room.onInsert((_c, r) => { if (r.host.isEqual(identity)) useRoom(r.code); });
   conn.db.room.onUpdate(() => render());
 
   conn.subscriptionBuilder()
-    .onApplied(() => void conn.reducers.createRoom({}))
+    .onApplied(() => {
+      const mine = [...conn.db.room.iter()].find((r) => r.host.isEqual(identity));
+      if (mine) useRoom(mine.code);
+      else void conn.reducers.createRoom({});
+    })
     .subscribe(`SELECT * FROM room WHERE host = 0x${identity.toHexString()}`);
 }
