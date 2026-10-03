@@ -28,3 +28,22 @@ describe('extractFeatures', () => {
     expect(f.symmetry).toBeGreaterThan(0.8);
   });
 });
+
+import { REVEAL, revealSeconds, revealSlot } from '../src';
+
+describe('reveal timing', () => {
+  it('walks intro → each weapon → 3‥2‥1', () => {
+    const n = 3, total = revealSeconds(n);
+    expect(revealSlot(0.1, n)).toEqual({ kind: 'intro' });
+    expect(revealSlot(REVEAL.introS + 0.01, n)).toMatchObject({ kind: 'weapon', index: 0 });
+    expect(revealSlot(REVEAL.introS + REVEAL.perWeaponS * 2 + 0.1, n)).toMatchObject({ kind: 'weapon', index: 2 });
+    expect(revealSlot(total - 2.5, n)).toEqual({ kind: 'countdown', number: 3 });
+    expect(revealSlot(total - 0.2, n)).toEqual({ kind: 'countdown', number: 1 });
+  });
+
+  it('a full 12-player room fits the cap and still shows every weapon', () => {
+    const total = revealSeconds(12);
+    expect(total).toBeLessThanOrEqual(REVEAL.maxS);
+    expect(revealSlot(total - REVEAL.countdownS - 0.01, 12)).toMatchObject({ kind: 'weapon', index: 11 });
+  });
+});

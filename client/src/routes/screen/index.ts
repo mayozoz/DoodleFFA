@@ -6,6 +6,8 @@ import { Arena } from './arena';
 import { lobbyOverlay } from './lobby';
 import { resultsOverlay } from './results';
 import { mountScreenDebug } from './debug-status';
+import { mountScoreboard } from './scoreboard';
+import { mountReveal } from './reveal';
 
 // Shared screen (/screen). Creates a room, subscribes to everything public for it, and
 // renders. It never simulates — positions come from `fighter` rows, ~100 ms behind.
@@ -13,7 +15,6 @@ import { mountScreenDebug } from './debug-status';
 const LABEL: Partial<Record<Phase, string>> = {
   draw: 'Draw your weapon!',
   drop: 'Pick your drop spot!',
-  reveal: 'Behold…',
 };
 
 export async function mount(el: HTMLElement) {
@@ -35,13 +36,29 @@ export async function mount(el: HTMLElement) {
     overlay.innerHTML = '';
     arena.setPhase(phase);
     if (phase === 'lobby') cleanup = lobbyOverlay(overlay, conn, code);
-    else if (phase === 'results') cleanup = resultsOverlay(overlay, conn, code);
-    else {
+    else if (phase === 'results') {
+      const a = resultsOverlay(overlay, conn, code), b = mountScoreboard(overlay, conn, code);
+      cleanup = () => { a(); b(); };
+    } else if (phase === 'reveal') {
+      cleanup = mountReveal(overlay, conn, code);
+    } else {
       const box = document.createElement('div');
       box.className = 'center';
       box.innerHTML = `<h1>${LABEL[phase] ?? ''}</h1>`;
       overlay.appendChild(box);
-      cleanup = mountCountdown(box, () => conn.db.room.code.find(code)?.phaseEndsAt);
+      const a = mountCountdown(box, () => conn.db.room.code.find(code)?.phaseEndsAt);
+      let b = () => {};
+      if (phase === 'battle') {
+        b = mountScoreboard(overlay, conn, code);
+        const fight = document.createElement('div');
+        fight.className = 'center';
+        fight.style.position = 'fixed';
+        fight.style.inset = '0';
+        fight.innerHTML = '<div class="fight">FIGHT!</div>';
+        overlay.appendChild(fight);
+        setTimeout(() => fight.remove(), 950);
+      }
+      cleanup = () => { a(); b(); };
     }
   };
 

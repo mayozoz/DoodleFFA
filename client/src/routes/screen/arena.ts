@@ -1,7 +1,7 @@
 import { Application, Container, Graphics, Texture, type Sprite } from 'pixi.js';
 import {
   ARCHETYPE_MODULES, Character, Character3D, Feedback, Interpolator, STAGE, Stage3D, StageGrid, Tweener,
-  createWeaponSprite, drawMarker, loadCharacterAsset, loadCutout, motionFeel, type CharacterAsset,
+  createWeaponSprite, drawMarker, ease, loadCharacterAsset, loadCutout, motionFeel, type CharacterAsset,
 } from '@doodle/engine';
 import { DEFAULT_SWING, MAX_HP, arenaExtents, colorForSlot, type Marker, type Phase, type StoredWeapon } from '@doodle/spec';
 import type { DbConnection } from '../../module_bindings';
@@ -24,7 +24,11 @@ interface FighterView {
   interp: Interpolator;
   lastAttack: bigint;
   stored: StoredWeapon;
+  /** set once HP hits 0; the avatar + weapon fade out and stay hidden for the rest of the round */
+  dead: boolean;
 }
+
+const DEATH_FADE_S = 0.9;
 
 /**
  * Shared-screen arena. With the 3D character: three.js draws floor grid + bodies on a canvas
@@ -90,7 +94,13 @@ export class Arena {
   setRoom(code: string) { this.code = code; }
   setPhase(p: Phase) {
     this.phase = p;
-    if (p === 'draw' || p === 'lobby') this.clearFighters();
+    if (p === 'draw' || p === 'lobby') {
+      // Round boundary: drop every fighter and every weapon texture, so nobody's old doodle
+      // can show up next round.
+      this.clearFighters();
+      for (const tex of this.textures.values()) tex.destroy(true);
+      this.textures.clear();
+    }
   }
 
   private wire() {
@@ -104,6 +114,7 @@ export class Arena {
       if (!v) return;
       v.interp.push(f.x, f.y, f.facing);
       v.char.setHp(f.hp / MAX_HP);
+      if (f.hp <= 0) this.killFighter(v);
       if (f.lastAttackAt.microsSinceUnixEpoch !== v.lastAttack) {
         v.lastAttack = f.lastAttackAt.microsSinceUnixEpoch;
         this.playAttack(v, f.facing);
@@ -143,8 +154,11 @@ export class Arena {
       body3d = new Character3D(this.asset, tint);
       this.stage3d.scene.add(body3d.root);
     }
-    const v: FighterView = { char, body3d, last: null, weapon: null, interp: new Interpolator(), lastAttack: 0n, stored: PLACEHOLDER };
+    const v: FighterView = { char, body3d, last: null, weapon: null, interp: new Interpolator(), lastAttack: 0n, stored: PLACEHOLDER, dead: false };
     this.fighters.set(hex, v);
+    // Joined mid-battle (e.g. screen reload): someone already out shouldn't pop back in.
+    const row = [...this.conn.db.fighter.iter()].find((f) => f.player.toHexString() === hex);
+    if (row && row.hp <= 0) this.killFighter(v, true);
     await this.refreshWeapon(hex);
   }
 
@@ -173,7 +187,8 @@ export class Arena {
 
   /** Raw doodle PNG (sprite fallback): strokes only, no white box. */
   private async loadPng(key: string, png: Uint8Array): Promise<Texture | null> {
-    return this.cachedCutout(`png:${key}`, png);
+    // Keyed by content, not just player: a re-submitted drawing must never reuse the old texture.
+    return this.cachedCutout(`png:${key}:${png.length}:${hashBytes(png)}`, png);
   }
 
   private async cachedCutout(key: string, src: string | Uint8Array): Promise<Texture | null> {
@@ -186,8 +201,25 @@ export class Arena {
     } catch { return null; }
   }
 
+  /** Fade the dead fighter's avatar (3D body + ring) and overlay (weapon, tag, HP bar) out of the arena. */
+  private killFighter(v: FighterView, instant = false) {
+    if (v.dead) return;
+    v.dead = true;
+    const hide = () => {
+      v.char.view.visible = false;
+      v.body3d?.setOpacity(0);
+    };
+    if (instant) return hide();
+    void this.tweener.to(DEATH_FADE_S, (t) => {
+      const a = 1 - t;
+      v.char.view.alpha = a;
+      v.body3d?.setOpacity(a);
+    }, ease.inQuad).then(hide);
+    // TODO(M1): death confetti in the player's color (fx_event 'death' already fires).
+  }
+
   private playAttack(v: FighterView, facing: number) {
-    if (!v.weapon) return;
+    if (!v.weapon || v.dead) return;
     const mod = ARCHETYPE_MODULES[v.stored.spec.archetype];
     const feel = motionFeel(v.stored.spec.motion);
     void v.body3d?.attack(v.stored.spec.archetype, feel, this.tweener);
@@ -277,4 +309,11 @@ export class Arena {
       this.markers.addChild(g);
     }
   }
+}
+
+/** FNV-1a over the bytes — cheap content key for doodle textures. */
+function hashBytes(b: Uint8Array): string {
+  let h = 2166136261;
+  for (let i = 0; i < b.length; i++) h = Math.imul(h ^ b[i]!, 16777619);
+  return (h >>> 0).toString(36);
 }

@@ -6,11 +6,21 @@
 //
 // Requires generated bindings (pnpm stdb:generate) and Node ≥ 22 (or `undici` installed).
 
+import { readFileSync, readdirSync } from 'node:fs';
 import { DbConnection } from '../client/src/module_bindings';
 
 const [code = '', nArg = '12', uri = 'ws://localhost:3000', db = 'doodle-arena'] = process.argv.slice(2);
 if (!code) { console.error('usage: pnpm loadtest <ROOM> [clients] [uri] [db]'); process.exit(1); }
 const N = Number(nArg);
+
+// Real sample doodles (white background, like a phone canvas) so reveal cards and weapon art have
+// something to show. Falls back to a 1×1 PNG if the folder is empty.
+const SAMPLES = (() => {
+  try {
+    const dir = 'client/public/dev-sprites';
+    return readdirSync(dir).filter((f) => f.endsWith('.png')).map((f) => new Uint8Array(readFileSync(`${dir}/${f}`)));
+  } catch { return []; }
+})();
 
 const PNG_1x1 = new Uint8Array([
   137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0, 0, 0, 1, 8, 6, 0, 0, 0, 31, 21, 196, 137,
@@ -29,7 +39,8 @@ function bot(i: number) {
         if (!r) return;
         if ((r.phase === 'draw' || r.phase === 'drop') && !submitted) {
           submitted = true;
-          void conn.reducers.submitDrawing({ strokes: '{"width":1,"height":1,"strokes":[]}', png: PNG_1x1, features: '{}' });
+          const png = SAMPLES.length ? SAMPLES[i % SAMPLES.length]! : PNG_1x1;
+          void conn.reducers.submitDrawing({ strokes: '{"width":512,"height":512,"strokes":[]}', png, features: '{}' });
         }
         if (r.phase === 'drop') void conn.reducers.setDrop({ x: Math.random(), y: Math.random() });
         if (r.phase === 'battle') {

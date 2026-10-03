@@ -1,6 +1,8 @@
 import { SenderError } from 'spacetimedb/server';
 import spacetimedb, { tickSchedule } from '../schema';
-import { isAfterOrEqual } from '../lib/time';
+import { isAfterOrEqual, secondsBetween } from '../lib/time';
+import { dropCanEndEarly } from '../lib/weapons';
+import { DROP_MIN_S } from '@doodle/spec';
 import { advancePhase } from '../lib/phases';
 import { cleanupFx, stepBattle } from '../lib/sim';
 import { GAME } from '../balance';
@@ -23,7 +25,8 @@ export const tick = spacetimedb.reducer(
       if (r.phase === 'lobby') continue;
       // Isolate rooms: one room's bug must not freeze every other room (they share this tick).
       try {
-        if (isAfterOrEqual(ctx.timestamp, r.phaseEndsAt)) {
+        const early = r.phase === 'drop' && dropCanEndEarly(ctx, r, secondsBetween(r.phaseStartedAt, ctx.timestamp), DROP_MIN_S);
+        if (early || isAfterOrEqual(ctx.timestamp, r.phaseEndsAt)) {
           advancePhase(ctx, r);
           continue;
         }

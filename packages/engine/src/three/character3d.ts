@@ -43,11 +43,13 @@ export class Character3D {
   private pose: Pose = {};
   private attackToken = 0;
   private runWeight = 0;
+  private materials: THREE.Material[] = [];
 
   constructor(asset: CharacterAsset, color: number) {
     this.model = SkeletonUtils.clone(asset.scene);
     this.model.scale.setScalar(MODEL_SCALE);
     const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.75, metalness: 0 });
+    this.materials.push(mat);
     this.model.traverse((o) => {
       if ((o as THREE.Mesh).isMesh) {
         (o as THREE.Mesh).material = mat;
@@ -64,6 +66,7 @@ export class Character3D {
       new THREE.RingGeometry(0.42, 0.52, 40),
       new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.9, depthWrite: false }),
     );
+    this.materials.push(ring.material);
     ring.rotation.x = -Math.PI / 2;
     ring.position.y = 0.01;
     this.root.add(ring, this.model);
@@ -119,6 +122,16 @@ export class Character3D {
     this.root.updateMatrixWorld(true);
     hand.getWorldPosition(tmpV);
     return { x: tmpV.x, y: tmpV.z, h: tmpV.y };
+  }
+
+  /** 0–1. Fades body + ground ring together (death). 1 restores full opacity. */
+  setOpacity(a: number) {
+    for (const m of this.materials) {
+      const base = m === this.materials[0] ? 1 : 0.9;
+      m.transparent = a < 1 || base < 1;
+      m.opacity = base * a;
+    }
+    this.root.visible = a > 0;
   }
 
   /** Top of the head (for name tag / HP bar), in game height units. */

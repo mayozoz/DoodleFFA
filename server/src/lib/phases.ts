@@ -1,4 +1,4 @@
-import { arenaExtents, mulberry32, stormStartRadius, type Phase } from '@doodle/spec';
+import { arenaExtents, mulberry32, revealSeconds, stormStartRadius, type Phase } from '@doodle/spec';
 import { GAME, PHASE_SECONDS } from '../balance';
 import { addSeconds } from './time';
 import { applyFallbacks } from './weapons';
@@ -20,13 +20,21 @@ export function enterPhase(ctx: Ctx, r: RoomRow, phase: Phase) {
   const next: RoomRow = { ...r, phase, phaseStartedAt: ctx.timestamp, phaseEndsAt: addSeconds(ctx.timestamp, seconds) };
 
   switch (phase) {
-    case 'draw':
+    case 'lobby':
+      // Round over (results finished): clear every drawing, weapon and fighter from it.
       resetRound(ctx, r.code);
+      break;
+    case 'draw':
+      resetRound(ctx, r.code); // also covers "Play again" straight from results
       next.winner = '';
       break;
-    case 'reveal':
+    case 'reveal': {
       applyFallbacks(ctx, r.code, r.seed);
+      // One showcase per weapon + 3‥2‥1 (packages/spec/src/timing.ts — clients use the same math).
+      const n = [...ctx.db.weapon.roomCode.filter(r.code)].length;
+      next.phaseEndsAt = addSeconds(ctx.timestamp, revealSeconds(n));
       break;
+    }
     case 'battle':
       Object.assign(next, spawnFighters(ctx, r));
       break;
@@ -34,6 +42,7 @@ export function enterPhase(ctx: Ctx, r: RoomRow, phase: Phase) {
   ctx.db.room.code.update(next);
 }
 
+/** Wipe one room's per-round data: drawings, doodles, weapons, fighters, inputs, projectiles, fx. */
 function resetRound(ctx: Ctx, code: string) {
   for (const p of ctx.db.player.roomCode.filter(code)) {
     ctx.db.player.identity.update({ ...p, alive: true, dropX: -1, dropY: -1, placement: 0 });

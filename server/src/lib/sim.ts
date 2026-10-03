@@ -1,11 +1,29 @@
-import { arenaExtents, hashString, mulberry32, rollDamage, stormStartRadius, type StoredWeapon } from '@doodle/spec';
-import { BALANCE, GAME } from '../balance';
+import { arenaExtents, hashString, mulberry32, rollDamage, stormStartRadius, type StoredWeapon, type WeaponSpec } from '@doodle/spec';
+import { BALANCE, GAME, KNOCKBACK } from '../balance';
 import { addSeconds, secondsBetween } from './time';
 import { readWeapon } from './weapons';
 import type { Ctx, FighterRow, RoomRow } from './ctx';
 
 // Battle simulation for one room, one tick. Server-authoritative; clients only render.
 // Budget: O(n²) over ≤12 fighters + projectiles. No spatial index.
+
+/** Per-fighter transient state, stored as JSON in `fighter.effects`. */
+interface Effects {
+  /** knockback velocity (units/s), decays every tick */
+  kb?: [number, number];
+}
+
+function readEffects(f: FighterRow): Effects {
+  try { return f.effects ? (JSON.parse(f.effects) as Effects) : {}; } catch { return {}; }
+}
+
+/** How far this weapon shoves a victim (world units). */
+export function knockbackDistance(spec: WeaponSpec): number {
+  let d = KNOCKBACK.base[spec.archetype] * (0.7 + 0.6 * spec.motion.weight);
+  if (spec.on_hit.includes('knockback')) d *= KNOCKBACK.onHitBonus;
+  if (spec.vfx.some((v) => v.type === 'goo')) d *= KNOCKBACK.gooBonus;
+  return d;
+}
 
 export function stepBattle(ctx: Ctx, r: RoomRow, dt: number) {
   const now = ctx.timestamp;
@@ -14,17 +32,30 @@ export function stepBattle(ctx: Ctx, r: RoomRow, dt: number) {
 
   const fighters = new Map<string, FighterRow>();
   const weapons = new Map<string, StoredWeapon>();
+  const effects = new Map<string, Effects>();
   for (const f of ctx.db.fighter.roomCode.filter(r.code)) {
     if (f.hp <= 0) continue;
     const id = f.player.toHexString();
     fighters.set(id, { ...f });
     weapons.set(id, readWeapon(ctx.db.weapon.player.find(f.player)));
+    effects.set(id, readEffects(f));
   }
 
   // 1. Movement (clamped to the screen-shaped arena rectangle)
   const { hw, hh } = arenaExtents(r.arenaR);
   const mx = hw - GAME.hitRadius, my = hh - GAME.hitRadius;
+  const decay = Math.exp(-dt / KNOCKBACK.decayS);
   for (const [id, f] of fighters) {
+    // knockback push (applied even if the player isn't touching the stick)
+    const fx = effects.get(id)!;
+    if (fx.kb) {
+      f.x += fx.kb[0] * dt;
+      f.y += fx.kb[1] * dt;
+      fx.kb = [fx.kb[0] * decay, fx.kb[1] * decay];
+      if (Math.hypot(fx.kb[0], fx.kb[1]) < 0.2) delete fx.kb;
+      f.x = Math.max(-mx, Math.min(mx, f.x));
+      f.y = Math.max(-my, Math.min(my, f.y));
+    }
     const input = ctx.db.input.player.find(f.player);
     if (!input) continue;
     const speed = GAME.moveSpeed * weapons.get(id)!.stats.moveSpeedMul; // TODO(M2): × slow effect
@@ -42,7 +73,7 @@ export function stepBattle(ctx: Ctx, r: RoomRow, dt: number) {
     const w = weapons.get(id)!;
     const target = autoAim(f, fighters);
     if (target) f.facing = Math.atan2(target.y - f.y, target.x - f.x);
-    resolveAttack(ctx, r, f, w, fighters, rand);
+    resolveAttack(ctx, r, f, w, fighters, effects, rand);
     f.cooldownReadyAt = addSeconds(now, w.stats.cooldown);
     f.lastAttackAt = now;
     ctx.db.input.player.update({ ...input, attackBuffered: false });
@@ -70,6 +101,8 @@ export function stepBattle(ctx: Ctx, r: RoomRow, dt: number) {
       if (p) ctx.db.player.identity.update({ ...p, alive: false, placement: alive + 1 });
       emitFx(ctx, r.code, 'death', f.x, f.y, f.player, 0);
     }
+    const fx = effects.get(f.player.toHexString());
+    f.effects = fx && Object.keys(fx).length ? JSON.stringify(fx) : '{}';
     ctx.db.fighter.player.update(f);
   }
 
@@ -100,7 +133,14 @@ function autoAim(f: FighterRow, all: Map<string, FighterRow>): FighterRow | null
 }
 
 /** M1: every archetype resolves as a swing arc. TODO(M2): per-archetype hitboxes (see README). */
-function resolveAttack(ctx: Ctx, r: RoomRow, f: FighterRow, w: StoredWeapon, all: Map<string, FighterRow>, rand: () => number) {
+function resolveAttack(
+  ctx: Ctx, r: RoomRow, f: FighterRow, w: StoredWeapon,
+  all: Map<string, FighterRow>, effects: Map<string, Effects>, rand: () => number,
+) {
+  // Initial speed whose per-tick decaying steps sum to exactly the knockback distance
+  // (Σ v·dt·decayⁿ = v·dt / (1 − decay)), so balance.ts distances are what players get.
+  const dt = 1 / GAME.tickHz, decay = Math.exp(-dt / KNOCKBACK.decayS);
+  const push = (knockbackDistance(w.spec) * (1 - decay)) / dt;
   emitFx(ctx, r.code, 'attack', f.x, f.y, f.player, f.facing);
   const reach = w.stats.rangeUnits + GAME.hitRadius;
   const halfArc = (140 / 2) * (Math.PI / 180);
@@ -112,7 +152,17 @@ function resolveAttack(ctx: Ctx, r: RoomRow, f: FighterRow, w: StoredWeapon, all
     const dmg = rollDamage(w.stats.damagePerHit, rand, BALANCE);
     o.hp -= dmg;
     emitFx(ctx, r.code, 'hit', o.x, o.y, f.player, dmg);
-    // TODO(M2): on_hit effects (knockback, burn, slow, chain, lifesteal, pierce).
+    // Knockback, away from the attacker (along the attack direction if they overlap).
+    const d = Math.hypot(dx, dy);
+    const [ux, uy] = d > 1e-3 ? [dx / d, dy / d] : [Math.cos(f.facing), Math.sin(f.facing)];
+    const ofx = effects.get(o.player.toHexString());
+    if (ofx) {
+      let vx = (ofx.kb?.[0] ?? 0) + ux * push, vy = (ofx.kb?.[1] ?? 0) + uy * push;
+      const sp = Math.hypot(vx, vy);
+      if (sp > KNOCKBACK.maxSpeed) { vx *= KNOCKBACK.maxSpeed / sp; vy *= KNOCKBACK.maxSpeed / sp; }
+      ofx.kb = [vx, vy];
+    }
+    // TODO(M2): other on_hit effects (burn, slow, chain, lifesteal, pierce).
   }
 }
 

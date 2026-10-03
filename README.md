@@ -143,7 +143,11 @@ The load test checks that the 20 Hz tick holds with 12 clients on Maincloud. If 
 ```
 
 ### Round state machine (`server/src/lib/phases.ts`)
-`lobby → draw (20 s) → drop (15 s) → reveal (15 s) → battle (60 s) → results (20 s) → lobby`
+`lobby → draw (20 s) → drop (5–15 s) → reveal (≈ 1.2 + 1.6 × weapons + 3 s) → battle (60 s) → results (20 s) → lobby`
+
+- **Drop ends early** (`dropCanEndEarly` in `server/src/lib/weapons.ts`). After at least `DROP_MIN_S` (5 s), Drop ends once every connected player has dropped *and* every weapon has every generation step that can actually finish. A step can't finish if its keys are missing, or while M1's hard-coded swing is on. 15 s stays the hard cap, so a slow AI call can only make Drop as long as it was before.
+- **Reveal** shows one showcase per weapon: the owner in their color, the weapon art with a test swing for its type, and its name. Then 3‥2‥1, then FIGHT!. The length comes from `revealSeconds(n)` in `packages/spec/src/timing.ts`, and the server and both clients use the same math, so they stay in sync without extra messages.
+- During Reveal the phone shows the player's own weapon card: art, name, and a control hint ("tap to **stab**"), never stats. It then shows the same 3‥2‥1.
 
 - `room.phase` changes only inside `enterPhase()`, which also runs the work that happens on entering each phase:
   - **draw:** reset the round

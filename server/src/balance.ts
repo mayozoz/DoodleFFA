@@ -1,14 +1,15 @@
-import { MAX_HP, type BalanceConfig } from '@doodle/spec';
+import { MAX_HP, type Archetype, type BalanceConfig } from '@doodle/spec';
 
 // ──────────────────────────────────────────────────────────────────────────
 //  THE tuning file. Every gameplay number that playtesting might change lives
 //  here. The formula itself is in packages/spec/src/balance.ts.
 // ──────────────────────────────────────────────────────────────────────────
 
-// HP scale: 5000 HP (MAX_HP in packages/spec/src/arena.ts). Everything that deals damage is
-// scaled ×50 from the original 100-HP tuning, so fights last as long but numbers hit harder.
+// HP scale: 5000 HP (MAX_HP in packages/spec/src/arena.ts). Damage was first scaled ×50 from the
+// 100-HP tuning (600 DPS), then ×1.5 → 900 after playtesting: the default swing landed ~454 real
+// DPS ≈ 11 s per kill at perfect uptime; 900 brings that to ~7 s, inside the brief's 6–10 s duel.
 export const BALANCE: BalanceConfig = {
-  targetDps: 600,
+  targetDps: 900,
   cooldownMin: 0.25,
   cooldownMax: 1.5,
   baseCooldown: {
@@ -50,10 +51,38 @@ export const GAME = {
   fxEventTtlMs: 1000,
 } as const;
 
+/**
+ * Knockback: total distance (world units) a hit shoves the victim away from the attacker.
+ * It's a fast-decaying push, not a teleport, so it reads smoothly on screen.
+ * Distance = base[archetype] × (0.7 + 0.6 × motion.weight) × bonuses.
+ */
+export const KNOCKBACK = {
+  base: {
+    swing: 1.2,  // solid sideways clout
+    thrust: 1.6, // focused poke, pushes straight back
+    slam: 2.4,   // biggest: radial shockwave
+    shoot: 0.5,  // small per projectile (several can land)
+    throw: 0.9,
+    whip: 1.0,   // snappy crack
+    spin: 0.7,   // hits often, so each push is small
+    beam: 0.4,   // sustained, barely pushes
+  } satisfies Record<Archetype, number>,
+  /** weapon has `knockback` in on_hit */
+  onHitBonus: 1.6,
+  /** weapon has `goo` vfx (brief: goo → knockback) */
+  gooBonus: 1.3,
+  /** push decays with this time constant (s); total distance = speed × decay */
+  decayS: 0.12,
+  /** cap so stacked hits can't fling someone across the map */
+  maxSpeed: 40,
+} as const;
+
 /** Phase lengths in seconds. Server-authoritative. */
 export const PHASE_SECONDS = {
   draw: 20,
+  /** hard cap — Drop usually ends early once weapons are ready (DROP_MIN_S, dropCanEndEarly) */
   drop: 15,
+  /** placeholder — actual length is revealSeconds(weapon count), set when Reveal starts */
   reveal: 15,
   battle: 60,
   results: 20,

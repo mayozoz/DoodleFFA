@@ -9,6 +9,7 @@ import { dropView } from './drop';
 import { battleView } from './battle';
 import { waitingView } from './waiting';
 import { resultsView } from './results';
+import { revealView } from './reveal';
 import { mountPlayDebug } from './debug-status';
 
 // Controller (/play). Subscribes to its room, the room's players, and its own
@@ -19,7 +20,7 @@ const VIEWS: Record<Phase, View> = {
   lobby: waitingView('You\'re in! Watch the big screen.'),
   draw: drawView,
   drop: dropView,
-  reveal: waitingView('Look up!'),
+  reveal: revealView,
   battle: battleView,
   results: resultsView,
 };
@@ -51,6 +52,8 @@ export async function mount(el: HTMLElement) {
         `SELECT * FROM fighter WHERE player = 0x${me}`,
         // own weapon only — needed for the cooldown ring (stats.cooldown)
         `SELECT * FROM weapon WHERE player = 0x${me}`,
+        // own doodle — shown on the reveal weapon card
+        `SELECT * FROM doodle WHERE player = 0x${me}`,
       ]);
   };
 
