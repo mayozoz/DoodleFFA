@@ -1,18 +1,22 @@
-// Android: navigator.vibrate. iOS Safari has no vibration API → flash the screen edge instead.
-
-const canVibrate = typeof navigator !== 'undefined' && 'vibrate' in navigator;
+// Use real device vibration where available; preserve visual feedback elsewhere.
 let edge: HTMLDivElement | null = null;
+let edgeTimer: ReturnType<typeof setTimeout> | undefined;
 
 export function haptic(ms = 15) {
-  if (canVibrate) {
-    navigator.vibrate(ms);
-    return;
+  // Keep the call synchronous with the user's press, as required by browsers.
+  if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+    try {
+      if (navigator.vibrate(ms)) return;
+    } catch {
+      // A denied/unsupported vibration must never prevent an attack.
+    }
   }
   if (!edge) {
     edge = document.createElement('div');
     edge.className = 'edge-flash';
     document.body.appendChild(edge);
   }
+  if (edgeTimer !== undefined) clearTimeout(edgeTimer);
   edge.classList.add('on');
-  setTimeout(() => edge?.classList.remove('on'), Math.max(60, ms * 3));
+  edgeTimer = setTimeout(() => edge?.classList.remove('on'), Math.max(60, ms * 3));
 }

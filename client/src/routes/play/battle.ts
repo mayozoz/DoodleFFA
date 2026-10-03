@@ -60,7 +60,7 @@ export const battleView: View = (ctx) => {
   btn.onpointerdown = () => {
     btn.animate([{ scale: 1 }, { scale: 0.9 }, { scale: 1 }], { duration: 120 });
     click();
-    haptic(15);
+    haptic(50);
     void ctx.conn.reducers.pressAttack({});
   };
 
