@@ -1,0 +1,25 @@
+{
+  "name": "doodle-arena",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@9.15.0",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "dev": "pnpm --filter @doodle/client dev",
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "typecheck": "pnpm -r typecheck",
+    "stdb:start": "spacetime start",
+    "stdb:publish": "spacetime publish --module-path server doodle-arena",
+    "stdb:publish:clean": "spacetime publish --module-path server --delete-data doodle-arena",
+    "stdb:publish:cloud": "spacetime publish -s maincloud --module-path server doodle-arena",
+    "stdb:generate": "spacetime generate --lang typescript --out-dir client/src/module_bindings --module-path server",
+    "stdb:logs": "spacetime logs -f doodle-arena",
+    "loadtest": "tsx scripts/loadtest.ts"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
+}

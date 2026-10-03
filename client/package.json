@@ -1,0 +1,25 @@
+{
+  "name": "@doodle/client",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host",
+    "build": "tsc -p tsconfig.json && vite build",
+    "preview": "vite preview --host",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@doodle/engine": "workspace:*",
+    "@doodle/spec": "workspace:*",
+    "nipplejs": "^0.10.2",
+    "pixi-filters": "^6.0.0",
+    "pixi.js": "^8.6.0",
+    "qrcode": "^1.5.4",
+    "spacetimedb": "^2.10.2"
+  },
+  "devDependencies": {
+    "@types/qrcode": "^1.5.5",
+    "vite": "^6.0.0"
+  }
+}

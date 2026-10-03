@@ -1,0 +1,15 @@
+{
+  "name": "Petal Storm Shuriken",
+  "grip": [0.5, 0.5],
+  "tip": [0.95, 0.5],
+  "archetype": "shoot",
+  "range": 0.6,
+  "area": 0.2,
+  "cooldown": 0.5,
+  "projectile": { "count": 3, "spread_deg": 30, "speed": 0.7, "behavior": "split" },
+  "on_hit": ["slow"],
+  "vfx": [{ "type": "petals", "where": "trail", "intensity": 0.9 }],
+  "motion": { "elasticity": 0.4, "weight": 0.2, "wobble": 0.6 },
+  "palette": ["#ff8fc7", "#3cb043"],
+  "sfx_prompt": "soft whoosh of spinning petals"
+}

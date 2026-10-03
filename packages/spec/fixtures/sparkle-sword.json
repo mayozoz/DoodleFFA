@@ -1,0 +1,15 @@
+{
+  "name": "Glitterfang",
+  "grip": [0.08, 0.5],
+  "tip": [0.96, 0.5],
+  "archetype": "swing",
+  "range": 0.45,
+  "area": 0.5,
+  "cooldown": 0.5,
+  "projectile": null,
+  "on_hit": [],
+  "vfx": [{ "type": "sparkles", "where": "trail", "intensity": 0.8 }],
+  "motion": { "elasticity": 0.6, "weight": 0.4, "wobble": 0.3 },
+  "palette": ["#2f9bff", "#f5f5f5"],
+  "sfx_prompt": "bright metallic swish with chimes"
+}

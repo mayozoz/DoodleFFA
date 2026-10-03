@@ -1,0 +1,18 @@
+{
+  "name": "Grandpa's Thunder Mallet",
+  "grip": [0.5, 0.92],
+  "tip": [0.5, 0.1],
+  "archetype": "slam",
+  "range": 0.3,
+  "area": 0.9,
+  "cooldown": 1.2,
+  "projectile": null,
+  "on_hit": ["knockback", "chain"],
+  "vfx": [
+    { "type": "electric", "where": "impact", "intensity": 1.0 },
+    { "type": "sparkles", "where": "tip", "intensity": 0.4 }
+  ],
+  "motion": { "elasticity": 0.2, "weight": 0.95, "wobble": 0.1 },
+  "palette": ["#3b3b3b", "#ffd60a"],
+  "sfx_prompt": "heavy wooden thud with a crack of thunder"
+}

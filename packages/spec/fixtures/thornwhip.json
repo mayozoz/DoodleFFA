@@ -1,0 +1,18 @@
+{
+  "name": "Thornwhip of the Ember Garden",
+  "grip": [0.12, 0.55],
+  "tip": [0.94, 0.40],
+  "archetype": "whip",
+  "range": 0.7,
+  "area": 0.4,
+  "cooldown": 0.6,
+  "projectile": null,
+  "on_hit": ["burn", "knockback"],
+  "vfx": [
+    { "type": "fire", "where": "trail", "intensity": 0.8 },
+    { "type": "thorns", "where": "impact", "intensity": 0.6 }
+  ],
+  "motion": { "elasticity": 0.9, "weight": 0.3, "wobble": 0.5 },
+  "palette": ["#ff5a1f", "#3a7d2c"],
+  "sfx_prompt": "leathery crack with crackling flame"
+}
