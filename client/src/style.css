@@ -47,3 +47,21 @@ input { font: inherit; padding: 12px 14px; border-radius: 12px; border: 2px soli
 @keyframes a-whip   { 0%, 100% { transform: none } 25% { transform: skewY(-18deg) rotate(-20deg) } 55% { transform: skewY(22deg) rotate(30deg) } 75% { transform: skewY(-8deg) } }
 @keyframes a-spin   { from { transform: rotate(0) } to { transform: rotate(720deg) } }
 @keyframes a-beam   { 0%, 100% { filter: none; transform: none } 40% { transform: translateX(-2%) } 45% { transform: translateX(2%) } 60% { filter: drop-shadow(0 0 30px #fff) brightness(1.6); transform: scale(1.05) } }
+
+/* Controllers: no double-tap zoom, no tap highlight, no callouts on long-press. `manipulation`
+   keeps taps instant; the stick and attack button opt out of all browser gestures. */
+html, body, button, input, canvas { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+#stick, #atk, #c, #arena { touch-action: none; }
+input, select { font-size: 16px; } /* iOS zooms into inputs smaller than 16px */
+
+/* Rotate hint (controller) */
+.rotate-hint { position: fixed; left: 50%; translate: -50%; z-index: 50; display: flex; align-items: center; gap: 12px;
+  color: var(--fg); font-weight: 800; pointer-events: none; }
+.rotate-hint.card { bottom: max(24px, env(safe-area-inset-bottom)); padding: 14px 20px; border-radius: 18px;
+  background: #000a; border: 2px solid var(--player); font-size: 18px; }
+.rotate-hint.pill { bottom: max(10px, env(safe-area-inset-bottom)); padding: 6px 12px; border-radius: 999px;
+  background: #000a; font-size: 13px; }
+.rotate-phone { width: 18px; height: 30px; border: 3px solid var(--player); border-radius: 5px;
+  animation: rotate-phone 1.8s ease-in-out infinite; }
+.rotate-hint.pill .rotate-phone { width: 11px; height: 18px; border-width: 2px; border-radius: 3px; }
+@keyframes rotate-phone { 0%, 25% { transform: rotate(0) } 55%, 85% { transform: rotate(-90deg) } 100% { transform: rotate(0) } }

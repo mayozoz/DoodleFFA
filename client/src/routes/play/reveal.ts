@@ -1,6 +1,7 @@
 import { REVEAL, type StoredWeapon } from '@doodle/spec';
 import { secondsLeft } from '../../net/clock';
 import { ATTACK_VERB, playTestSwing, weaponArt } from '../../ui/weapon-art';
+import { mountRotateHint } from '../../ui/rotate-hint';
 import type { View } from './types';
 
 /**
@@ -10,6 +11,7 @@ import type { View } from './types';
 export const revealView: View = (ctx) => {
   ctx.el.innerHTML = `<div class="center"><div id="card" class="reveal-card"></div></div>`;
   const card = ctx.el.querySelector<HTMLDivElement>('#card')!;
+  const unhint = mountRotateHint(ctx.el, true); // the moment to turn the phone before the fight
   const w = ctx.conn.db.weapon.player.find(ctx.identity);
   const d = ctx.conn.db.doodle.player.find(ctx.identity);
   const stored = w?.spec ? (JSON.parse(w.spec) as StoredWeapon) : null;
@@ -51,5 +53,5 @@ export const revealView: View = (ctx) => {
     raf = requestAnimationFrame(frame);
   };
   frame();
-  return () => { clearInterval(swing); cancelAnimationFrame(raf); };
+  return () => { clearInterval(swing); cancelAnimationFrame(raf); unhint(); };
 };

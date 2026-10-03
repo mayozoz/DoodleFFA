@@ -3,6 +3,7 @@ import { MAX_HP, type StoredWeapon } from '@doodle/spec';
 import { secondsLeft } from '../../net/clock';
 import { haptic } from '../../ui/haptics';
 import { click } from '../../audio/sfx';
+import { mountRotateHint } from '../../ui/rotate-hint';
 import type { View } from './types';
 
 const SEND_HZ = 20;
@@ -10,13 +11,13 @@ const SEND_HZ = 20;
 /** Landscape: joystick left, signature button right (with cooldown ring), HP bar on top. */
 export const battleView: View = (ctx) => {
   ctx.el.innerHTML = `
-    <div style="position:fixed;inset:0;display:grid;grid-template-columns:1fr 1fr">
+    <div style="position:fixed;inset:0;display:grid;grid-template-columns:1fr 1fr;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)">
       <div id="hp" style="position:absolute;top:12px;left:50%;translate:-50%;width:40vw;height:14px;border-radius:7px;background:#0006;overflow:hidden">
         <div id="hpfill" style="height:100%;width:100%;background:var(--player)"></div>
       </div>
       <div id="stick" style="position:relative"></div>
       <div style="display:grid;place-items:center">
-        <button id="atk" style="position:relative;width:38vmin;height:38vmin;border-radius:50%;font-size:28px">
+        <button id="atk" style="position:relative;width:min(38vmin,42dvh,220px);height:min(38vmin,42dvh,220px);border-radius:50%;font-size:28px">
           <svg viewBox="0 0 100 100" style="position:absolute;inset:-8px;width:calc(100% + 16px);height:calc(100% + 16px);rotate:-90deg">
             <circle id="ring" cx="50" cy="50" r="48" fill="none" stroke="#fff" stroke-width="4" pathLength="1" stroke-dasharray="1" stroke-dashoffset="0"/>
           </svg>
@@ -24,6 +25,7 @@ export const battleView: View = (ctx) => {
       </div>
     </div>`;
 
+  const unhint = mountRotateHint(ctx.el, false);
   const player = ctx.conn.db.player.identity.find(ctx.identity);
   const color = player ? getComputedStyle(document.documentElement).getPropertyValue('--player') : '#fff';
   const stick = nipplejs.create({ zone: ctx.el.querySelector<HTMLElement>('#stick')!, mode: 'dynamic', color });
@@ -73,6 +75,7 @@ export const battleView: View = (ctx) => {
     clearInterval(sender);
     cancelAnimationFrame(raf);
     stick.destroy();
+    unhint();
     void ctx.conn.reducers.setInput({ dx: 0, dy: 0 });
   };
 };

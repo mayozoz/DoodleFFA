@@ -2,6 +2,7 @@ import type { Phase } from '@doodle/spec';
 import { connect } from '../../net/connection';
 import { syncFromPhaseStart } from '../../net/clock';
 import { applyPlayerTheme } from '../../ui/theme';
+import { preventControllerZoom } from '../../ui/no-zoom';
 import type { PlayCtx, View } from './types';
 import { joinView } from './join';
 import { drawView } from './draw';
@@ -26,6 +27,7 @@ const VIEWS: Record<Phase, View> = {
 };
 
 export async function mount(el: HTMLElement) {
+  preventControllerZoom();
   const { conn, identity } = await connect('play');
   const me = identity.toHexString();
   const ctx: PlayCtx = { conn, identity, el, roomCode: '' };
