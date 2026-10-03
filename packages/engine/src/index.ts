@@ -6,3 +6,6 @@ export * from './feedback';
 export * from './interpolation';
 export * from './archetypes';
 export * from './vfx';
+export * from './stage';
+export * from './cutout';
+export * from './three';

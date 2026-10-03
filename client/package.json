@@ -16,7 +16,8 @@
     "pixi-filters": "^6.0.0",
     "pixi.js": "^8.6.0",
     "qrcode": "^1.5.4",
-    "spacetimedb": "^2.10.2"
+    "spacetimedb": "^2.10.2",
+    "three": "^0.180.0"
   },
   "devDependencies": {
     "@types/qrcode": "^1.5.5",

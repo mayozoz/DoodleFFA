@@ -6,7 +6,8 @@
   "main": "src/index.ts",
   "scripts": {
     "build": "spacetime build --module-path .",
-    "typecheck": "tsc -p tsconfig.json"
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
   },
   "dependencies": {
     "@doodle/spec": "workspace:*",

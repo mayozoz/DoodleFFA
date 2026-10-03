@@ -3,7 +3,9 @@
   "private": true,
   "type": "module",
   "packageManager": "pnpm@9.15.0",
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "dev": "pnpm --filter @doodle/client dev",
     "build": "pnpm -r build",
@@ -15,7 +17,10 @@
     "stdb:publish:cloud": "spacetime publish -s maincloud --module-path server doodle-arena",
     "stdb:generate": "spacetime generate --lang typescript --out-dir client/src/module_bindings --module-path server",
     "stdb:logs": "spacetime logs -f doodle-arena",
-    "loadtest": "tsx scripts/loadtest.ts"
+    "loadtest": "tsx scripts/loadtest.ts",
+    "agents:schema": "tsx scripts/export-agent-schema.ts",
+    "lab": "tsx scripts/prompt-lab.ts",
+    "character:build": "\"${BLENDER:-/Applications/Blender.app/Contents/MacOS/Blender}\" -b --python scripts/build_character.py"
   },
   "devDependencies": {
     "tsx": "^4.19.0",

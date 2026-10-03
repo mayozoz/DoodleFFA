@@ -34,7 +34,10 @@ The planning brief is the source of truth for design. This README covers how the
 │   └── test/                  vitest
 ├── packages/engine/           PixiJS procedural animation: character rig, weapon attach,
 │   └── src/                   archetype motions, vfx particles, hit feedback, interpolation
-└── scripts/                   set-secrets.ts, loadtest.ts
+├── assets-src/character/      Mixamo FBX sources + .blend (never shipped) → `pnpm character:build`
+├── agents/weapon_smith/       Fetch.ai uAgent (Python): doodle → weapon JSON via ASI:One (see its README)
+└── scripts/                   set-secrets.ts, loadtest.ts, export-agent-schema.ts, prompt-lab.ts,
+                               build_character.py (Blender)
 ```
 
 **Dependency direction:** `client → engine → spec` and `server → spec`. Shared types are defined only in `packages/spec`. Don't copy them anywhere else.
@@ -100,7 +103,7 @@ Then set `VITE_STDB_URI=wss://maincloud.spacetimedb.com` in `.env`.
 | `VITE_STDB_URI` | client | `ws://localhost:3000` locally, `wss://maincloud.spacetimedb.com` in prod |
 | `VITE_STDB_DB` | client, scripts | database name, default `doodle-arena` |
 | `VITE_PUBLIC_URL` | client (`/screen`) | base URL in the QR code; your LAN IP in dev |
-| `GEMINI_API_KEY`, `ELEVENLABS_API_KEY`, `AWS_*`, `S3_BUCKET`, `ASSET_BASE_URL` | **server, via the `secrets` table** | the module doesn't read these from env; load them with `set-secrets` |
+| `GEMINI_API_KEY`, `ASI_ONE_API_KEY`, `ELEVENLABS_API_KEY`, `AWS_*`, `S3_BUCKET`, `ASSET_BASE_URL` | **server, via the `secrets` table** | the module doesn't read these from env; load them with `set-secrets` |
 
 Only `VITE_*` variables reach the browser. **Never put an API key in a `VITE_` variable.**
 
@@ -178,7 +181,7 @@ The load test checks that the 20 Hz tick holds with 12 clients on Maincloud. If 
 
 ### SpacetimeDB API (checked against `spacetimedb@2.10.2`)
 - Tables: `table({ name, public }, { col: t.u32().primaryKey(), … })`. Indexes: `t.string().index('btree')` → `ctx.db.tbl.col.filter(v)` / `.delete(v)`. Unique/PK columns: `.find()`, `.update()`, `.delete()`.
-- Scheduled reducer: `spacetimedb.reducer({ onSchedule: tickSchedule }, { arg: tickSchedule.rowType }, fn)`, with `ScheduleAt.interval(micros)` inserted in `init`. `tick` rejects external callers via `ctx.senderAuth.isInternal`.
+- Scheduled reducer: `spacetimedb.reducer({ onSchedule: tickSchedule }, { arg: tickSchedule.rowType }, fn)`, with `ScheduleAt.interval(micros)` inserted in `init`. `tick` rejects external callers by checking `ctx.sender.isEqual(ctx.databaseIdentity)`. Don't use `ctx.senderAuth.isInternal`: it's false for scheduled calls too, which locks out the scheduler.
 - Procedures: `spacetimedb.procedure(t.unit(), (ctx) => …)`.
   - `ctx.http.fetch` is **synchronous** and returns a response with `.ok`, `.status`, `.json()`, `.text()` and `.bytes()`.
   - Database access only happens inside `ctx.withTx(tx => …)`. That callback may be retried, so keep it free of side effects.
@@ -201,6 +204,27 @@ The load test checks that the 20 Hz tick holds with 12 clients on Maincloud. If 
 - Multi-projectile weapons split each attack's budget across their projectiles.
 - `burn` and `poison`/`fire` move `dotShare` of the budget into DoT, so the total stays at 12 DPS.
 - The test `never exceeds the target DPS budget` is the guardrail. Keep it passing.
+
+### 3D character
+- **Pipeline:** Mixamo FBX files in `assets-src/character/` are built into `client/public/models/character/character.glb` by `pnpm character:build`, which runs headless Blender.
+  - It keeps one armature and the mesh, names the clips (`stickman_run.fbx` → `Run`), and strips forward root motion.
+  - It replaces the materials with plain white, so the game can tint the body.
+  - Set `BLENDER=/path/to/blender` if Blender isn't in `/Applications`.
+- **Rendering:** a three.js canvas under the Pixi canvas draws the floor grid and the bodies (`packages/engine/src/three/`). The transparent Pixi canvas on top draws weapons, fx, name tags, HP bars, storm and markers.
+  - The camera is orthographic and tilted 55°, so game → screen is linear. `Stage3D.toScreen(x, y, h, unit)` is the single formula both layers use.
+  - Screen shake is applied to both layers.
+- **Animation:** the mixer blends `Idle` and `Run` by speed. Attacks are code-driven poses layered on top (spine + right arm in character space, timed by the weapon's `MotionFeel`), so characters run and attack at once.
+  - Poses per archetype live in `packages/engine/src/three/poses.ts`.
+  - The weapon sprite follows the projected right-hand bone.
+- **Fallback:** if `character.glb` fails to load, both `/screen` and `/dev/weapons` use the 2D rig and the Pixi grid.
+- **Playground flags:** `/dev/weapons?pose=swing&t=1.5&noweapon&run` freezes the body at a point in the attack (`t` 0–1 wind-up, 1–2 strike, 2–3 recover), hides the weapon, and turns on running. Use these to tune poses.
+
+### Spec providers (Gemini vs. ASI:One)
+- `SPEC_PROVIDER` in `server/src/config.ts` picks who answers `gen_spec`. It defaults to `'asi1'` (Fetch.ai's ASI:One); switch to `'gemini'` to compare. Each provider is about 30 lines in `server/src/procedures/spec_providers.ts`, and its only job is to return raw JSON text.
+- Whichever provider runs, its output goes through the same validation, balance and fallback. A provider is a supplier, never the backend.
+- The two schemas live side by side in `server/src/prompts/spec.v1.ts`. `SPEC_GEMINI_SCHEMA` uses Gemini's OpenAPI subset. `SPEC_JSON_SCHEMA` is standard JSON Schema for OpenAI-style strict mode, which requires `additionalProperties: false` everywhere and every key in `required`. `server/test/spec-schema.test.ts` keeps both rules true.
+- `spacetime logs` shows `[gen] spec asi1/spec.v1 <player>: 3.4s, 1 field(s) fixed` per weapon. That line is the speed and quality baseline for choosing a provider.
+- The Fetch.ai **Weapon Smith agent** (`agents/weapon_smith/`) wraps the same prompt and schema behind a REST endpoint, ready for Phase 2 (`SPEC_PROVIDER = 'agent'`). Run `pnpm agents:schema` after any prompt or enum change to keep it in sync.
 
 ### Fallbacks (round never stalls)
 | Missing at Reveal | Where | Fallback |

@@ -7,8 +7,8 @@
 
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
+import { SECRET_KEYS } from '../server/src/config';
 
-const KEYS = ['GEMINI_API_KEY', 'ELEVENLABS_API_KEY', 'AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_REGION', 'S3_BUCKET', 'ASSET_BASE_URL'];
 const DB = process.env.VITE_STDB_DB ?? 'doodle-arena';
 const server = process.argv[2];
 
@@ -18,7 +18,7 @@ for (const line of readFileSync('.env', 'utf8').split('\n')) {
   if (m) env[m[1]!] = m[2]!.replace(/^["']|["']$/g, '');
 }
 
-for (const k of KEYS) {
+for (const k of SECRET_KEYS) {
   const v = env[k];
   if (!v) { console.log(`skip ${k} (empty)`); continue; }
   const args = ['call', ...(server ? ['-s', server] : []), DB, 'set_secret', JSON.stringify(k), JSON.stringify(v)];

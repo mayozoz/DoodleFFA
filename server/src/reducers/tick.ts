@@ -14,7 +14,9 @@ export const tick = spacetimedb.reducer(
   { onSchedule: tickSchedule },
   { arg: tickSchedule.rowType },
   (ctx) => {
-    if (!ctx.senderAuth.isInternal) throw new SenderError('tick is scheduler-only');
+    // The scheduler calls with the database's own identity. (senderAuth.isInternal is false for
+    // every reducer call, scheduled or not, so it can't be used here.)
+    if (!ctx.sender.isEqual(ctx.databaseIdentity)) throw new SenderError('tick is scheduler-only');
     const dt = 1 / GAME.tickHz;
     for (const r of [...ctx.db.room.iter()]) {
       if (r.phase === 'lobby') continue;

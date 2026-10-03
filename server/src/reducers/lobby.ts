@@ -40,17 +40,25 @@ export const joinRoom = spacetimedb.reducer(
     if (!r) throw new SenderError('room not found');
     const cleanName = name.replace(/[\u0000-\u001f]/g, '').trim().slice(0, 16) || 'Player';
 
+    // Player color is server-assigned once per room and never changes: no reducer sets it, and a
+    // returning identity (same saved token) always gets its existing row — and color — back.
     const existing = ctx.db.player.identity.find(ctx.sender);
     if (existing && existing.roomCode === code) {
-      // Reconnect / rename: keep the color slot.
       ctx.db.player.identity.update({ ...existing, name: cleanName, connected: true });
       return;
     }
     if (r.phase !== 'lobby') throw new SenderError('round in progress');
     if (existing) ctx.db.player.identity.delete(ctx.sender); // switching rooms
 
-    const players = [...ctx.db.player.roomCode.filter(code)];
-    if (players.length >= MAX_PLAYERS) throw new SenderError('room full');
+    let players = [...ctx.db.player.roomCode.filter(code)];
+    if (players.filter((p) => p.connected).length >= MAX_PLAYERS) throw new SenderError('room full');
+    // Disconnected players keep their slot so they get the same color back. Only when every slot
+    // is held does a disconnected player (lowest slot first) give theirs up.
+    if (players.length >= MAX_PLAYERS) {
+      const evict = players.filter((p) => !p.connected).sort((a, b) => a.colorSlot - b.colorSlot)[0]!;
+      ctx.db.player.identity.delete(evict.identity);
+      players = players.filter((p) => p !== evict);
+    }
     const slot = nextFreeColorSlot(players.map((p) => p.colorSlot));
     const color = colorForSlot(slot);
 
@@ -75,7 +83,9 @@ export const startRound = spacetimedb.reducer((ctx) => {
   if (!r) throw new SenderError('not a host');
   if (r.phase !== 'lobby' && r.phase !== 'results') throw new SenderError('round already running');
   const players = [...ctx.db.player.roomCode.filter(r.code)];
-  if (players.length < 2) throw new SenderError('need at least 2 players');
+  if (players.filter((p) => p.connected).length < 2) throw new SenderError('need at least 2 players');
+  // Players who left the lobby don't fight; drop them now (freeing their slots for next time).
+  for (const p of players) if (!p.connected) ctx.db.player.identity.delete(p.identity);
 
   enterPhase(ctx, { ...r, round: r.round + 1, seed: ctx.random.uint32() }, 'draw');
 });
@@ -84,8 +94,9 @@ export const onDisconnect = spacetimedb.clientDisconnected((ctx) => {
   const p = ctx.db.player.identity.find(ctx.sender);
   if (!p) return;
   const r = ctx.db.room.code.find(p.roomCode);
-  // In the lobby, leaving frees the color slot. Mid-round, the fighter just stands there.
-  if (!r || r.phase === 'lobby') ctx.db.player.identity.delete(ctx.sender);
-  else ctx.db.player.identity.update({ ...p, connected: false });
+  if (!r) { ctx.db.player.identity.delete(ctx.sender); return; }
+  // Keep the row (and color) so a phone that locks or reloads rejoins as the same color.
+  // Lobby: freed at startRound. Mid-round: the fighter just stands there.
+  ctx.db.player.identity.update({ ...p, connected: false });
 });
 

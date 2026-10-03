@@ -12,7 +12,7 @@ describe('validateWeaponSpec', () => {
 
   it('falls back per field and never throws', () => {
     const { spec, issues } = validateWeaponSpec(
-      { name: 'Ok', archetype: 'laser-cannon', range: 9, on_hit: ['burn', 'explode', 'slow', 'chain'], vfx: [{ type: 'nuke' }] },
+      { name: 'Ok', archetype: 'laser-cannon', range: 900, on_hit: ['burn', 'explode', 'slow', 'chain'], vfx: [{ type: 'nuke' }] },
       DEFAULT_SWING,
     );
     expect(spec.name).toBe('Ok');
@@ -31,5 +31,20 @@ describe('validateWeaponSpec', () => {
   it('drops projectile on non-shoot archetypes', () => {
     const { spec } = validateWeaponSpec({ ...DEFAULT_SWING, projectile: { count: 3, spread_deg: 10, speed: 1, behavior: 'arc' } }, DEFAULT_SWING);
     expect(spec.projectile).toBeNull();
+  });
+
+  it('rescales 0–10 / 0–100 answers instead of clamping them to max', () => {
+    const { spec } = validateWeaponSpec({ ...DEFAULT_SWING, range: 7, area: 45, motion: { elasticity: 0.5, weight: 4, wobble: 0.2 } }, DEFAULT_SWING);
+    expect(spec.range).toBeCloseTo(0.7);
+    expect(spec.area).toBeCloseTo(0.45);
+    expect(spec.motion.weight).toBeCloseTo(0.4);
+  });
+
+  it('drops duplicate vfx types', () => {
+    const { spec } = validateWeaponSpec({
+      ...DEFAULT_SWING,
+      vfx: [{ type: 'poison', where: 'trail', intensity: 0.5 }, { type: 'poison', where: 'impact', intensity: 0.9 }],
+    }, DEFAULT_SWING);
+    expect(spec.vfx.map((v) => v.type)).toEqual(['poison']);
   });
 });

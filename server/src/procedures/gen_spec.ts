@@ -1,18 +1,22 @@
-import { TimeDuration } from 'spacetimedb';
 import { t } from 'spacetimedb/server';
 import { MYSTERY_STICK, fallbackSpecFromFeatures, hashString, validateWeaponSpec } from '@doodle/spec';
 import spacetimedb from '../schema';
-import { ENDPOINTS, MODELS, TIMEOUT_MS } from '../config';
-import { NAME_FLAVORS, SPEC_RESPONSE_SCHEMA, SPEC_SYSTEM_PROMPT } from '../prompts/spec.v1';
-import { toBase64 } from '../lib/base64';
+import { SPEC_PROVIDER } from '../config';
+import { NAME_FLAVORS, SPEC_PROMPT_VERSION, SPEC_SYSTEM_PROMPT } from '../prompts/spec.v1';
 import { storeWeapon } from '../lib/weapons';
+import { secondsBetween } from '../lib/time';
 import { loadJob, logFail, writeIfStillPending } from './common';
+import { SPEC_PROVIDERS, requestSpec } from './spec_providers';
 
-/** Doodle PNG + features → Gemini Flash → validate → balance → weapon.spec. Target 3–6 s. */
+/**
+ * Doodle PNG + features → SPEC_PROVIDER → validate → balance → weapon.spec. Target 3–6 s.
+ * The provider is only a supplier: whatever it returns goes through the same checks.
+ */
 export const genSpec = spacetimedb.procedure(t.unit(), (ctx) => {
   const job = loadJob(ctx, 'spec');
   if (!job) return {};
-  const key = job.secrets.GEMINI_API_KEY;
+  const provider = SPEC_PROVIDERS[SPEC_PROVIDER];
+  const key = job.secrets[provider.secret];
   if (!key) return {}; // no key → Reveal fallback
 
   const seed = job.seed ^ hashString(job.playerHex);
@@ -20,29 +24,18 @@ export const genSpec = spacetimedb.procedure(t.unit(), (ctx) => {
   const flavor = NAME_FLAVORS[seed % NAME_FLAVORS.length]!;
 
   try {
-    const res = ctx.http.fetch(`${ENDPOINTS.gemini(MODELS.spec)}?key=${encodeURIComponent(key)}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      timeout: TimeDuration.fromMillis(TIMEOUT_MS.spec),
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: SPEC_SYSTEM_PROMPT.replace('{{FLAVOR}}', flavor) }] },
-        contents: [{
-          role: 'user',
-          parts: [
-            { inlineData: { mimeType: 'image/png', data: toBase64(job.png) } },
-            { text: `Drawing features: ${JSON.stringify(job.features ?? {})}` },
-          ],
-        }],
-        generationConfig: { responseMimeType: 'application/json', responseSchema: SPEC_RESPONSE_SCHEMA, temperature: 1.0 },
-      }),
+    const text = requestSpec(ctx, SPEC_PROVIDER, key, {
+      png: job.png,
+      featuresJson: JSON.stringify(job.features ?? {}),
+      systemPrompt: SPEC_SYSTEM_PROMPT.replace('{{FLAVOR}}', flavor),
     });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const text: unknown = res.json()?.candidates?.[0]?.content?.parts?.[0]?.text;
-    const { spec, issues } = validateWeaponSpec(typeof text === 'string' ? text : null, fallback);
-    if (issues.length) console.info(`[gen] spec ${job.playerHex.slice(0, 8)}: ${issues.length} field(s) fixed`);
+    const { spec, issues } = validateWeaponSpec(text, fallback);
+    // Latency + fix-up count go to `spacetime logs` only — this is the Phase 0 baseline.
+    const elapsed = ctx.withTx((tx) => secondsBetween(ctx.timestamp, tx.timestamp));
+    console.info(`[gen] spec ${SPEC_PROVIDER}/${SPEC_PROMPT_VERSION} ${job.playerHex.slice(0, 8)}: ${elapsed.toFixed(1)}s, ${issues.length} field(s) fixed`);
     writeIfStillPending(ctx, 'spec', storeWeapon(spec), true);
   } catch (e) {
-    logFail('gen_spec', e);
+    logFail(`gen_spec (${SPEC_PROVIDER})`, e);
   }
   return {};
 });

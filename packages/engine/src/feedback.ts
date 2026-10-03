@@ -30,7 +30,8 @@ export class Feedback {
     const frozen = performance.now() < this.freezeUntil;
     this.tweener.timeScale = frozen ? 0 : 1;
     this.shakeT += dt;
-    this.stage.position.set(
+    // Shake via pivot, not position, so callers can keep positioning/centering the container.
+    this.stage.pivot.set(
       (Math.random() - 0.5) * this.shakeAmp,
       (Math.random() - 0.5) * this.shakeAmp,
     );

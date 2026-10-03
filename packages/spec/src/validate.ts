@@ -33,6 +33,13 @@ function num(v: unknown, fb: number, lo: number, hi: number, path: string, issue
     if (v !== undefined) issues.push(`${path}: not a number, using fallback`);
     return fb;
   }
+  // Models sometimes answer 0–1 fields on a 0–10 or 0–100 scale. Rescale before clamping, or
+  // "range: 7" silently becomes max range.
+  if (lo === 0 && hi === 1 && v > 1) {
+    const scaled = v <= 10 ? v / 10 : v <= 100 ? v / 100 : 1;
+    issues.push(`${path}: ${v} looks like a 0–${v <= 10 ? 10 : 100} scale, rescaled to ${scaled}`);
+    return clamp(scaled, 0, 1);
+  }
   if (v < lo || v > hi) issues.push(`${path}: ${v} clamped to [${lo}, ${hi}]`);
   return clamp(v, lo, hi);
 }
@@ -78,6 +85,10 @@ function vfxList(v: unknown, fb: VfxSpec[], issues: string[]): VfxSpec[] {
     const e = raw as Record<string, unknown>;
     if (!isOneOf(VFX_TYPES, e.type)) {
       issues.push(`vfx[${i}].type: unknown "${String(e.type)}", dropped`);
+      continue;
+    }
+    if (out.some((o) => o.type === e.type)) {
+      issues.push(`vfx[${i}].type: duplicate "${e.type}", dropped`);
       continue;
     }
     out.push({

@@ -24,17 +24,20 @@ export function lobbyOverlay(el: HTMLElement, conn: DbConnection, code: string):
     const ps = [...conn.db.player.iter()].filter((p) => p.roomCode === code).sort((a, b) => a.colorSlot - b.colorSlot);
     list.innerHTML = ps.map((p) => {
       const c = colorForSlot(p.colorSlot);
-      return `<li style="padding:8px 14px;border-radius:12px;border:3px solid ${c.hex};color:${c.hex};font-weight:800">${p.marker} ${p.name}</li>`;
+      // Disconnected players keep their color slot until the round starts; show them faded.
+      return `<li style="padding:8px 14px;border-radius:12px;border:3px solid ${c.hex};color:${c.hex};font-weight:800;opacity:${p.connected ? 1 : 0.35}">${p.marker} ${p.name}</li>`;
     }).join('');
   };
   const onIns = () => refresh();
   conn.db.player.onInsert(onIns);
+  conn.db.player.onUpdate(onIns);
   conn.db.player.onDelete(onIns);
   refresh();
 
   el.querySelector<HTMLButtonElement>('#start')!.onclick = () => void conn.reducers.startRound({}).catch((e: unknown) => alert(String(e)));
   return () => {
     conn.db.player.removeOnInsert(onIns);
+    conn.db.player.removeOnUpdate(onIns);
     conn.db.player.removeOnDelete(onIns);
   };
 }

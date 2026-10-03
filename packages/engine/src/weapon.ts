@@ -3,7 +3,9 @@ import { GlowFilter, OutlineFilter } from 'pixi-filters';
 import type { StoredWeapon } from '@doodle/spec';
 
 /** Standard on-screen length of grip→tip, in world units. */
-export const WEAPON_LENGTH_UNITS = 1.6;
+// Playtest feedback (2026-10-03): weapons should read big and goofy — 4× the earlier 1.2.
+// Visual only: server hit reach is BALANCE.rangeUnits (server/src/balance.ts).
+export const WEAPON_LENGTH_UNITS = 4.8;
 
 /**
  * Builds the weapon sprite: pivot at `grip`, rotated so grip→tip points along +x, scaled to a
