@@ -2,7 +2,7 @@ import nipplejs from 'nipplejs';
 import { MAX_HP, type StoredWeapon } from '@doodle/spec';
 import { secondsLeft } from '../../net/clock';
 import { haptic } from '../../ui/haptics';
-import { click } from '../../audio/sfx';
+import { click, resumeAudio } from '../../audio/sfx';
 import type { View } from './types';
 
 const SEND_HZ = 20;
@@ -14,6 +14,7 @@ export const battleView: View = (ctx) => {
       <div id="hp" style="position:absolute;top:12px;left:50%;translate:-50%;width:40vw;height:14px;border-radius:7px;background:#0006;overflow:hidden">
         <div id="hpfill" style="height:100%;width:100%;background:var(--player)"></div>
       </div>
+      <button id="hear-weapon" style="position:absolute;top:36px;right:12px;z-index:1;font-size:14px;padding:8px 12px">Hear weapon</button>
       <div id="stick" style="position:relative"></div>
       <div style="display:grid;place-items:center">
         <button id="atk" style="position:relative;width:38vmin;height:38vmin;border-radius:50%;font-size:28px">
@@ -45,6 +46,17 @@ export const battleView: View = (ctx) => {
 
   // Every press: local bounce + click + haptic, even during cooldown. Server buffers one press.
   const btn = ctx.el.querySelector<HTMLButtonElement>('#atk')!;
+  let active = true;
+  const hear = ctx.el.querySelector<HTMLButtonElement>('#hear-weapon')!;
+  hear.onclick = async () => {
+    const ready = resumeAudio();
+    hear.disabled = true;
+    hear.textContent = 'Listening…';
+    const played = await ready && await ctx.audio?.announce(true);
+    if (!active) return;
+    hear.disabled = false;
+    hear.textContent = played ? 'Hear weapon' : 'Tap to retry';
+  };
   btn.onpointerdown = () => {
     btn.animate([{ scale: 1 }, { scale: 0.9 }, { scale: 1 }], { duration: 120 });
     click();
@@ -70,6 +82,7 @@ export const battleView: View = (ctx) => {
   loop();
 
   return () => {
+    active = false;
     clearInterval(sender);
     cancelAnimationFrame(raf);
     stick.destroy();

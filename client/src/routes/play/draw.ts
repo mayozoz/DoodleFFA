@@ -7,6 +7,8 @@ const COLORS = ['#111111', '#ff3b3b', '#2f6bff', '#22c55e'];
 const SIZE = 512; // canvas resolution sent to the server
 /** M3: flip on to kick off the hidden generation procedures after submit. */
 export const RUN_GENERATION = false;
+/** Sound generation can run independently of spec and sprite generation. */
+export const RUN_SFX_GENERATION = true;
 
 /** 20 s doodle canvas: 4 colors + undo, border in player color. Submits when the phase ends. */
 export const drawView: View = (ctx) => {
@@ -73,10 +75,14 @@ export const drawView: View = (ctx) => {
       features: JSON.stringify(extractFeatures(drawing)),
     }));
     if (RUN_GENERATION) {
-      // Fire-and-forget, in parallel. Results land in the weapon row; nothing is shown to players
+      // Fire-and-forget. Results land in the weapon row; nothing is shown to players
       // (only the ?debug overlay lists them while they run).
-      void debug.track('gen_spec', ctx.conn.procedures.genSpec({})).catch(() => {});
+      // Let sound generation use the finished spec's custom prompt when available.
+      void debug.track('gen_spec', ctx.conn.procedures.genSpec({})).catch(() => {}).then(() => {
+        void debug.track('gen_sfx', ctx.conn.procedures.genSfx({})).catch(() => {});
+      });
       void debug.track('gen_sprite', ctx.conn.procedures.genSprite({})).catch(() => {});
+    } else if (RUN_SFX_GENERATION) {
       void debug.track('gen_sfx', ctx.conn.procedures.genSfx({})).catch(() => {});
     }
   };

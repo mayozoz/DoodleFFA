@@ -7,7 +7,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "dev": "pnpm --filter @doodle/client dev",
+    "dev": "corepack pnpm --filter @doodle/client dev",
     "build": "pnpm -r build",
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck",

@@ -127,7 +127,12 @@ export class Arena {
     });
 
     // When a weapon row changes (fallback/AI spec, sprite URL), rebuild that fighter's weapon.
-    c.db.weapon.onUpdate((_e, _o, w) => { if (mine(w.roomCode)) void this.refreshWeapon(w.player.toHexString()); });
+    const prepareWeapon = (w: { roomCode: string; player: { toHexString(): string }; spec: string; sfxUrl: string }) => {
+      if (!mine(w.roomCode)) return;
+      void this.refreshWeapon(w.player.toHexString());
+    };
+    c.db.weapon.onInsert((_e, w) => prepareWeapon(w));
+    c.db.weapon.onUpdate((_e, _o, w) => prepareWeapon(w));
   }
 
   private async ensureFighter(hex: string) {
@@ -195,7 +200,6 @@ export class Arena {
       spec: v.stored.spec, stats: v.stored.stats, feel,
       tweener: this.tweener, unit: this.unit, fxLayer: this.fx, facing,
     });
-    // TODO(M4): play weapon sound (audio/sfx.ts) using row.sfxUrl or archetype preset.
   }
 
   private removeFighter(hex: string) {

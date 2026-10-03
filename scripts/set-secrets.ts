@@ -15,7 +15,7 @@ const server = process.argv[2];
 const env: Record<string, string> = {};
 for (const line of readFileSync('.env', 'utf8').split('\n')) {
   const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/);
-  if (m) env[m[1]!] = m[2]!.replace(/^["']|["']$/g, '');
+  if (m) env[m[1]!] = m[2]!.trim().replace(/^["']|["']$/g, '').trim();
 }
 
 for (const k of SECRET_KEYS) {

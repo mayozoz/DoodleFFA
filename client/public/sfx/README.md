@@ -1,10 +1,13 @@
 # Preset sounds
 
-Fallback SFX used when `weapon.sfxUrl` is empty. Small mp3s (< 30 KB each), one per archetype:
+Original synthesized WAV effects for swing, thrust, slam, shoot, throw, whip,
+spin, beam, and the controller click. Rebuild with `python3 scripts/build-sfx.py`.
 
-swing.mp3 · thrust.mp3 · slam.mp3 · shoot.mp3 · throw.mp3 · whip.mp3 · spin.mp3 · beam.mp3
+Each phone controller preloads and plays the generated `weapon.sfxUrl` when present,
+and uses the archetype preset if generation or audio decoding fails. Sound is
+unlocked by tapping Join, drawing, or using the phone controls. The shared
+screen does not play weapon audio. The phone also announces its weapon name
+during Reveal; Hear weapon replays the ElevenLabs announcement.
 
-Plus UI sounds: click.mp3 (button press), hit.mp3, death.mp3, countdown.mp3.
-
-Not committed yet — generate once with ElevenLabs Sound Effects (prompts in
-`server/src/prompts/sfx.v1.ts`) or grab CC0 sounds.
+Custom effects are one-second ElevenLabs MP3s stored as inline data URLs. They
+need only the server's private `ELEVENLABS_API_KEY`; S3 is not used for sound.
