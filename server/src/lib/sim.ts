@@ -8,7 +8,7 @@ import { addSeconds, secondsBetween } from './time';
 import { readWeapon } from './weapons';
 import { contains, meleeShape } from './hitbox';
 import {
-  activateAbility, battleGeometry, damage, hasEffect, hitRadius, moveFighter,
+  activateAbility, battleGeometry, creditDamage, damage, hasEffect, hitRadius, moveFighter,
   stepAbilityObjects, stepStatuses, timeSeconds, untargetable, type BattleGeometry,
 } from './abilities';
 import type { Ctx, FighterRow, RoomRow } from './ctx';
@@ -216,6 +216,7 @@ function applyHit(wd: World, attackerId: string, o: FighterRow, from: { x: numbe
   // damage() returns what actually landed (0 while the target is Invisible)
   const dmg = damage(o, rollDamage(w.stats.damagePerHit, wd.rand, BALANCE) * mul * boost, wd.seconds);
   if (dmg <= 0) return;
+  creditDamage(wd.ctx, o, attackerId, dmg);
   // Controller cue (Ethan): owner is the VICTIM. Only damage that actually landed, from another
   // player, emits this; storm/sudden-death never pass through applyHit.
   if (attackerId !== o.player.toHexString()) emitFx(wd.ctx, wd.r.code, 'damage', o.x, o.y, o.player, dmg);
@@ -400,4 +401,3 @@ export function cleanupFx(ctx: Ctx, roomCode: string) {
 }
 
 const normAngle = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
-

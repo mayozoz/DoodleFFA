@@ -1,4 +1,5 @@
 import '../play/battle-controls.css'; // same sword-button styles as the real phone controller
+import { abilityIcon } from '../../ui/ability-icons';
 
 /**
  * "How to play" for the shared-screen lobby: a clone of the phone battle controller (held
@@ -7,7 +8,7 @@ import '../play/battle-controls.css'; // same sword-button styles as the real ph
  * Loops while players join. Purely visual — no game state.
  */
 
-interface Step { target: 'stick' | 'hp' | 'atk' | 'ring'; title: string; text: string }
+interface Step { target: 'stick' | 'hp' | 'atk' | 'ring' | 'special'; title: string; text: string }
 
 // Left → right across the phone: stick (left half), HP (top center), button (right), its ring.
 const STEPS: Step[] = [
@@ -15,6 +16,7 @@ const STEPS: Step[] = [
   { target: 'hp', title: 'Health', text: 'Your bar. Stay inside the circle — the storm outside hurts!' },
   { target: 'atk', title: 'Attack', text: 'Tap the sword. Your weapon aims at the nearest enemy for you.' },
   { target: 'ring', title: 'Recharge', text: 'The ring refills between attacks. Tap early and it fires the moment it’s ready.' },
+  { target: 'special', title: 'Special ability', text: 'Tap the smaller button below the sword to use your special. You get two uses per battle.' },
 ];
 
 const HOLD_MS = 3600;  // caption fully visible — long enough to read from across the room
@@ -34,7 +36,7 @@ export function mountTutorial(host: HTMLElement): () => void {
           <div class="t-nipple"><div class="t-knob"></div></div>
           <div class="t-finger"></div>
         </div>
-        <div class="t-attack battle-attack-zone">
+        <div class="t-attack">
           <div class="battle-attack-frame" data-t="atk">
             <div class="battle-sword-button t-sword">
               <svg class="battle-sword" viewBox="0 0 48 48">
@@ -46,6 +48,10 @@ export function mountTutorial(host: HTMLElement): () => void {
             <svg class="battle-sword-cooldown" viewBox="0 0 100 100" data-t="ring">
               <circle class="t-ring" cx="50" cy="50" r="47" fill="none" stroke="#fff" stroke-width="2" pathLength="1" stroke-dasharray="1" stroke-dashoffset="0"/>
             </svg>
+          </div>
+          <div class="battle-special t-special" data-t="special">
+            <span class="battle-special-art">${abilityIcon('flash', false)}</span>
+            <span class="battle-special-status">2/2</span>
           </div>
         </div>
       </div>

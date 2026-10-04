@@ -38,7 +38,7 @@ export const ABILITIES = Object.fromEntries(
 ) as { readonly [K in keyof typeof BASE]: { readonly name: string; readonly cooldown: number; readonly duration: number } };
 export type AbilityId = keyof typeof ABILITIES;
 export const isAbilityId = (id: string): id is AbilityId => Object.hasOwn(BASE, id);
-export interface StatusEffect { until: number; dps?: number }
+export interface StatusEffect { until: number; dps?: number; source?: string }
 /** Unix seconds, always authored using the server clock. */
 export type FighterEffects = Partial<Record<AbilityId | 'poison' | 'burn' | 'silenced' | 'frozen', StatusEffect>>;
 export interface AbilityObjectData {

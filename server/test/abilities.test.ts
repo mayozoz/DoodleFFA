@@ -13,8 +13,10 @@ function setup(ability = 'flash') {
   const f = fighter('a', 0), enemy = fighter('b', 2);
   const all = new Map([['a', f], ['b', enemy]]);
   const rows = new Map<bigint, any>();
+  const players = [...all.values()].map(f => ({ identity: f.player, roomCode: 'TEST', totalDamage: 0 }));
   let seq = 0n;
   const ctx = { timestamp: timestamp(100), db: {
+    player: { roomCode: { filter: () => players }, identity: { find: () => undefined, update: (p: any) => Object.assign(players.find(o => o.identity.isEqual(p.identity))!, p) } },
     input: { player: { find: () => ({ dx: 1, dy: 0 }) } },
     abilityObject: {
       roomCode: { filter: (code: string) => [...rows.values()].filter(o => o.roomCode === code) },
@@ -23,7 +25,7 @@ function setup(ability = 'flash') {
     }, fxEvent: { insert: () => {} },
   } } as unknown as Ctx;
   const room = { code: 'TEST', arenaR: 12 } as RoomRow;
-  return { f, enemy, all, ctx, room, rows, setTime: (s: number) => { ctx.timestamp = timestamp(s); } };
+  return { f, enemy, all, ctx, room, rows, players, setTime: (s: number) => { ctx.timestamp = timestamp(s); } };
 }
 
 describe('special abilities', () => {
@@ -79,6 +81,16 @@ describe('special abilities', () => {
   it('dash uses a swept hit and knockback instead of testing only its endpoint', () => {
     const s = setup('dash'); s.enemy.x = 1; activateAbility(s.ctx, s.room, s.f, s.all);
     expect(s.enemy.hp).toBe(GAME.maxHp * 0.88); expect(s.enemy.x).toBeCloseTo(3);
+    expect(s.players[0]!.totalDamage).toBeCloseTo(GAME.maxHp * 0.12);
+  });
+  it('does not credit damage blocked by invulnerability or the ability health cost', () => {
+    const s = setup('dash'); setEffect(s.enemy, 'invisible', 102);
+    activateAbility(s.ctx, s.room, s.f, s.all);
+    expect(s.players[0]!.totalDamage).toBe(0);
+    s.f.abilityId = 'attack_boost'; s.setTime(110);
+    activateAbility(s.ctx, s.room, s.f, s.all);
+    expect(s.f.hp).toBeLessThan(GAME.maxHp);
+    expect(s.players.every(p => p.totalDamage === 0)).toBe(true);
   });
   it('hook hits the first opponent along its path even when table order differs', () => {
     const s = setup('hook'); s.enemy.x = 4;
@@ -94,12 +106,16 @@ describe('special abilities', () => {
     activateAbility(s.ctx, s.room, s.f, s.all); stepAbilityObjects(s.ctx, s.room, s.all, new Map(), 0.05);
     expect(effectsOf(s.enemy).poison?.until).toBe(105);
     s.setTime(101); stepStatuses(s.ctx, s.all, 1); expect(s.enemy.hp).toBe(GAME.maxHp - 125);
+    expect(s.players[0]!.totalDamage).toBe(125);
+    s.setTime(102); stepStatuses(s.ctx, s.all, 1);
+    expect(s.players[0]!.totalDamage).toBe(250);
     s.setTime(106); stepStatuses(s.ctx, s.all, 1); expect(hasEffect(s.enemy, 'poison', 106)).toBe(false);
   });
   it('life drain heals only actual damage and never exceeds maximum HP', () => {
     const s = setup('life_drain'); s.f.hp = 4000; s.enemy.hp = 50;
     activateAbility(s.ctx, s.room, s.f, s.all); stepAbilityObjects(s.ctx, s.room, s.all, new Map(), 1);
     expect(s.enemy.hp).toBe(0); expect(s.f.hp).toBe(4050);
+    expect(s.players[0]!.totalDamage).toBe(50);
   });
   it.each(['nuke1', 'nuke2'])('%s covers the arena without repeatedly damaging a stationary opponent', id => {
     const s = setup(id); activateAbility(s.ctx, s.room, s.f, s.all);
@@ -107,6 +123,7 @@ describe('special abilities', () => {
     expect(bombs.length).toBeGreaterThan(50);
     for (let t = 100; t < 105; t += 0.05) { s.setTime(t); stepAbilityObjects(s.ctx, s.room, s.all, new Map(), 0.05); }
     expect(s.enemy.hp).toBe(GAME.maxHp - 200); expect(s.rows.size).toBe(0);
+    expect(s.players[0]!.totalDamage).toBe(200);
   });
 });
 
@@ -121,7 +138,6 @@ function battle(ability = 'flash') {
   db.input.player.update = (row: any) => Object.assign(input, row);
   db.fighter = { roomCode: { filter: () => [...s.all.values()] }, player: { update: (row: FighterRow) => s.all.set(row.player.toHexString(), row) } };
   db.weapon = { player: { find: () => undefined } };
-  db.player = { identity: { find: () => undefined } };
   db.room = { code: { update: () => {} } };
   // weapon projectiles (shoot/throw) — none in these tests, but the tick reads the table
   db.projectile = { roomCode: { filter: () => [] }, insert: () => {}, id: { update: () => {}, delete: () => {} } };

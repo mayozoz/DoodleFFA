@@ -1,0 +1,38 @@
+/* Doodle arena menus: graph paper, pen strokes, and the title screen's lime ink. */
+.title-page.has-started, .room-lobby.arena-menu { background-color: #161824; background-image: radial-gradient(ellipse at 10% 15%, #7861bb24, transparent 50%), radial-gradient(ellipse at 90% 85%, #1c769c19, transparent 45%), linear-gradient(#ffffff04 1px, transparent 1px), linear-gradient(90deg, #ffffff04 1px, transparent 1px); background-size: auto, auto, 36px 36px, 36px 36px; }
+.arena-menu { --menu-lime: #dcff77; --menu-purple: #b994ff; --menu-cyan: #5bdbf5; isolation: isolate; }
+.menu-scribbles { position: fixed; inset: 0; pointer-events: none; z-index: -1; overflow: hidden; }
+.menu-scribbles svg { width: 100%; height: 100%; }
+.mode-page.arena-menu { position: relative; overflow-x: hidden; background: transparent; }
+.title-page .title-modes .mode-page { background: transparent; }
+.mode-page .mode-kicker { color: #dcff77; font-size: 11px; font-weight: 900; letter-spacing: .16em; border: 1px dashed #dcff7745; padding: 9px 16px; border-radius: 8px; transform: rotate(-2deg); }
+.mode-page.arena-menu h1 { font-size: clamp(34px, 4.6vw, 68px); letter-spacing: -.04em; text-shadow: 3px 4px #080a13; }
+.mode-page.arena-menu > p { color: #bbb9d0; font-size: 17px; line-height: 1.5; }
+.mode-page .mode-options { width: min(1000px, 100%); gap: 28px; margin: 24px 0; }
+.mode-page .mode-card { --card-ink: #dcff77; position: relative; padding: 26px 32px 32px; gap: 14px; background: linear-gradient(150deg, #2c303b, #20222f); border: 2px solid #dcff7755; border-radius: 25px 19px 27px 18px; box-shadow: 5px 7px 0 #090b14; }
+.mode-page .mode-card:nth-child(2) { --card-ink: #b994ff; border-color: #b994ff55; border-radius: 19px 27px 18px 25px; }
+.mode-page .mode-card:hover, .mode-page .mode-card:focus-visible { border-color: var(--card-ink); transform: translateY(-4px) rotate(-.6deg); }
+.mode-page .mode-card:nth-child(2):hover { transform: translateY(-4px) rotate(.6deg); }
+.mode-card-label { color: var(--card-ink); font-size: 10px; letter-spacing: .13em; font-weight: 900; }
+.mode-illustration { width: min(280px, 100%); height: 130px; align-self: center; }
+.mode-illustration svg { width: 100%; height: 100%; }
+.mode-page .mode-card h2 { font-size: clamp(25px, 2.8vw, 36px); letter-spacing: -.03em; }
+.mode-page .mode-card p { font-size: 15px; color: #c5c2d3; }
+.title-modes .mode-card .mode-action, .mode-card .mode-action { background: var(--card-ink); color: #111420; border: 2px solid #090b14; box-shadow: 0 4px #090b14; border-radius: 11px 14px 10px 13px; width: 100%; padding: 13px 18px; margin-top: auto; display: flex; justify-content: space-between; }
+.mode-page .mode-join { color: #d0ccdf; font-size: 14px; text-underline-offset: 5px; }
+.room-lobby.arena-menu .lobby-brand { color: #dcff77; font-size: 18px; letter-spacing: .06em; text-shadow: 2px 3px #090b14; }
+.room-lobby.arena-menu .lobby-mode { color: #dcff77; border-color: #dcff7733; background: #dcff7709; }
+.room-lobby.arena-menu .lobby-heading h1 { text-shadow: 3px 4px #090b14; }
+.room-lobby.arena-menu .lobby-panel { --panel-ink: #dcff77; position: relative; border: 2px solid #dcff7733; background: linear-gradient(145deg, #272a36f5, #1e202ef5); border-radius: 25px 20px 28px 19px; box-shadow: 5px 7px 0 #090b1480; }
+.room-lobby.arena-menu .lobby-party { --panel-ink: #b994ff; border-color: #b994ff33; border-radius: 20px 28px 19px 25px; }
+.room-lobby.arena-menu .lobby-controls { --panel-ink: #5bdbf5; border-color: #5bdbf533; }
+.room-lobby.arena-menu .lobby-panel::before { content: ''; position: absolute; top: -2px; left: 28px; width: 48px; height: 4px; border-radius: 3px; background: var(--panel-ink); }
+.room-lobby.arena-menu .lobby-panel .lobby-eyebrow { color: var(--panel-ink); }
+.room-lobby.arena-menu .lobby-qr { border-radius: 16px 20px 15px 18px; box-shadow: 4px 5px #090b14; }
+.room-lobby.arena-menu .lobby-code { color: #dcff77; text-shadow: 3px 4px #090b14; }
+.room-lobby.arena-menu .lobby-count { color: #dcff77; background: #dcff770c; border: 1px dashed #dcff7730; }
+.room-lobby.arena-menu .lobby-start-area #start:not(:disabled) { background: #dcff77; color: #111420; border: 2px solid #090b14; border-radius: 12px 16px 11px 14px; box-shadow: 0 5px #090b14; }
+.room-lobby.arena-menu .lobby-start-area #start:not(:disabled):hover { background: #e8ffa4; }
+.room-lobby.arena-menu .lobby-footer { color: #b6aec7; }
+@media (max-width: 620px) { .mode-page .mode-options { gap: 20px; } .mode-page .mode-card { padding: 22px; } .mode-illustration { height: 100px; } .menu-scribbles { opacity: .5; } }
+@media (prefers-reduced-motion: reduce) { .mode-page .mode-card { transition: none; } }

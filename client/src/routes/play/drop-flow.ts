@@ -2,7 +2,6 @@ import { ABILITIES, ABILITY_TUNING, isAbilityId, type AbilityId, type StoredWeap
 import { mountCountdown } from '../../ui/countdown';
 import { loadDoodle, weaponStage, type WeaponStage } from '../../ui/weapon-stage';
 import { ABILITY_GUIDE } from './ability-guide';
-import { mountAbilityPreview } from './ability-preview';
 import { weaponGuide } from './weapon-guide';
 import type { View } from './types';
 import './drop.css';
@@ -23,7 +22,6 @@ export const dropView: View = (ctx) => {
   try { step = Math.max(0, Math.min(3, Number(sessionStorage.getItem(key)) || 0)); } catch { /* private mode */ }
   let active = true, version = 0;
   let stage: WeaponStage | null = null;
-  let stopDemo = () => {};
   const timers: number[] = [];
   ctx.el.innerHTML = `<div class="prep-page"><header class="prep-header"><span>GET READY</span><div id="cd"></div></header><nav class="prep-steps" aria-label="Preparation steps"></nav><main class="prep-body"></main></div>`;
   const body = ctx.el.querySelector<HTMLElement>('.prep-body')!;
@@ -37,7 +35,6 @@ export const dropView: View = (ctx) => {
   };
   const render = () => {
     const current = ++version;
-    stopDemo(); stopDemo = () => {};
     stage?.destroy(); stage = null;
     nav.innerHTML = STEPS.map((name, i) => `<span class="${i === step ? 'is-current' : i < step ? 'is-done' : ''}" ${i === step ? 'aria-current="step"' : ''}>${i + 1} ${name}</span>`).join('');
     if (step === 0) {
@@ -61,8 +58,7 @@ export const dropView: View = (ctx) => {
       }, 300));
     } else if (step === 1) {
       const id = ability(), a = ABILITIES[id];
-      body.innerHTML = `<span class="prep-eyebrow">YOUR SPECIAL ABILITY</span><div class="prep-ability-art">${abilityIcon(id)}</div><h1>${a.name}</h1><p>${ABILITY_GUIDE[id].description}</p><div class="prep-facts"><span>${ABILITY_TUNING.charges} uses per battle</span><span>${a.cooldown}s cooldown</span></div><figure class="ability-demo"><div class="ability-preview"></div><figcaption>${ABILITY_GUIDE[id].caption}</figcaption></figure><p class="prep-hint">During battle, tap the small circular special button. Move the joystick to aim directional abilities.</p><button class="prep-next">See my weapon →</button><p class="prep-error" role="status"></p>`;
-      stopDemo = mountAbilityPreview(body.querySelector<HTMLElement>('.ability-preview')!, id);
+      body.innerHTML = `<span class="prep-eyebrow">YOUR SPECIAL ABILITY</span><div class="prep-ability-art">${abilityIcon(id, false)}</div><h1>${a.name}</h1><p>${ABILITY_GUIDE[id].description}</p><div class="prep-facts"><span>${ABILITY_TUNING.charges} uses per battle</span><span>${a.cooldown}s cooldown</span></div><p class="prep-hint">During battle, tap the small circular special button. Move the joystick to aim directional abilities.</p><button class="prep-next">See my weapon →</button><p class="prep-error" role="status"></p>`;
       const next = body.querySelector<HTMLButtonElement>('.prep-next')!;
       next.onclick = async () => {
         next.disabled = true; next.textContent = 'Preparing weapon…';
@@ -125,5 +121,5 @@ export const dropView: View = (ctx) => {
   ctx.conn.db.weapon.onUpdate(onWeapon);
   const swing = window.setInterval(() => stage?.swing(), 2200);
   render();
-  return () => { active = false; stopCd(); stopDemo(); timers.forEach(clearTimeout); clearInterval(swing); stage?.destroy(); ctx.conn.db.weapon.removeOnUpdate(onWeapon); };
+  return () => { active = false; stopCd(); timers.forEach(clearTimeout); clearInterval(swing); stage?.destroy(); ctx.conn.db.weapon.removeOnUpdate(onWeapon); };
 };

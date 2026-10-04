@@ -213,7 +213,7 @@ The load test checks that the 20 Hz tick holds with 12 clients on Maincloud. If 
 - The test `never exceeds the target DPS budget` is the guardrail. Keep it passing.
 
 ### Debug overlay (`?debug`)
-- Add `?debug` to any URL (`/screen?debug`, `/play?debug`) to turn it on for that device. It stays on (saved in `localStorage`) until you visit with `?debug=0`. Set `VITE_DEBUG=1` in `.env` to turn it on for every device.
+- Add `?debug` to a URL (`/screen?debug`, `/play?debug`) to show diagnostics for that visit. Normal game URLs keep the debug panel hidden; `?debug=0` explicitly disables it.
 - **Off by default**, so players never see it.
 - **Errors it shows:** client exceptions, failed reducer and procedure calls, connection drops, and server-side problems from the public `debug_event` table. The server writes that table from per-room `tick()` failures and failed `gen_*` steps, with short messages only (never prompts or raw model output).
 - **Waits it shows:**

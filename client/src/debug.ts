@@ -1,22 +1,15 @@
 // Debug overlay — OFF unless turned on, so players never see it (design pillar: the middle is
 // invisible). Turn on with any of:
-//   ?debug         on this device, sticky (localStorage) until ?debug=0
-//   VITE_DEBUG=1   in .env, for every device served by this build
+//   ?debug         for this visit only
+//   ?debug=0       explicitly disabled
 //
 // Shows: errors (client exceptions, failed reducer calls, connection drops, server-side
 // debug_event rows), and what we're waiting on (phase timers, overdue phases, generation steps
 // in flight, per-player weapon status, stalled ticks).
 
-const KEY = 'doodle.debug';
-
 function resolveFlag(): boolean {
   const q = new URLSearchParams(location.search).get('debug');
-  try {
-    if (q === '0' || q === 'false') localStorage.removeItem(KEY);
-    else if (q !== null) localStorage.setItem(KEY, '1');
-    if (localStorage.getItem(KEY) === '1') return true;
-  } catch { /* storage blocked: fall through to the URL / env */ }
-  return (q !== null && q !== '0' && q !== 'false') || import.meta.env.VITE_DEBUG === '1';
+  return q !== null && q !== '0' && q !== 'false';
 }
 
 export const DEBUG = resolveFlag();

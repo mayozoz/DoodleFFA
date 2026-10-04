@@ -32,7 +32,7 @@ export function createAbilityPreview(id: AbilityId) {
     fighter: { roomCode: { filter: () => [...fighters.values()] }, player: { update: (f: FighterRow) => fighters.set(f.player.toHexString(), f) } },
     input: { player: { find: (p: Identity) => inputs.get(p.toHexString()), update: (i: any) => inputs.set(i.player.toHexString(), i) } },
     weapon: { player: { find: () => ({ spec }) } },
-    player: { identity: { find: () => undefined } },
+    player: { roomCode: { filter: () => [] }, identity: { find: () => undefined } },
     room: { code: { update: () => {} } },
     projectile: { roomCode: { filter: () => [] }, insert: () => {}, id: { update: () => {}, delete: () => {} } },
     abilityObject: { roomCode: { filter: () => [...objects.values()] },

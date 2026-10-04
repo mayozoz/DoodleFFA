@@ -45,6 +45,8 @@ export const player = table(
     placement: t.u8(),
     // defaults let existing databases migrate in place (columns added after first publish)
     abilityId: t.string().default('flash'),
+    /** Actual damage dealt to opponents this round, including abilities and status effects. */
+    totalDamage: t.f64().default(0),
   },
 );
 

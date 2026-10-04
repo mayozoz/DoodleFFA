@@ -77,6 +77,7 @@ export const joinRoom = spacetimedb.reducer(
       dropY: -1,
       placement: 0,
       abilityId: 'flash',
+      totalDamage: 0,
     });
   },
 );
@@ -103,4 +104,3 @@ export const onDisconnect = spacetimedb.clientDisconnected((ctx) => {
   // Lobby: freed at startRound. Mid-round: the fighter just stands there.
   ctx.db.player.identity.update({ ...p, connected: false });
 });
-

@@ -17,6 +17,7 @@ function world(archetype: WeaponSpec['archetype'] = 'swing', elapsed = 1, attack
     effects: i === 0 && attack ? JSON.stringify({ pa: { at: 0, f: 0 } }) : '{}',
   }));
   const events: any[] = [], projectiles: any[] = [];
+  const players = [attacker, victim].map(identity => ({ identity, roomCode: 'TEST', totalDamage: 0 }));
   const spec: WeaponSpec = { ...DEFAULT_SWING, archetype,
     projectile: { count: 1, speed: 0.5, spread_deg: 0, behavior: 'pierce' } };
   const ctx = { timestamp, db: {
@@ -29,9 +30,9 @@ function world(archetype: WeaponSpec['archetype'] = 'swing', elapsed = 1, attack
       id: { delete: () => {}, update: () => {} } },
     fxEvent: { insert: (e: any) => events.push(e) },
     abilityObject: { roomCode: { filter: () => [] }, insert: () => {}, id: { delete: () => {}, update: () => {} } },
-    player: { identity: { find: () => undefined } }, room: { code: { update: () => {} } },
+    player: { roomCode: { filter: () => players }, identity: { find: () => undefined, update: (p: any) => Object.assign(players.find(o => o.identity.isEqual(p.identity))!, p) } }, room: { code: { update: () => {} } },
   } } as unknown as Ctx;
-  return { ctx, room, events, fighters, victim, attacker };
+  return { ctx, room, events, fighters, victim, attacker, players };
 }
 describe('server damage cues', () => {
   it.each(['swing', 'thrust', 'slam', 'shoot', 'throw', 'whip', 'spin', 'beam'] as const)(
@@ -42,6 +43,8 @@ describe('server damage cues', () => {
       expect(cue.value).toBeGreaterThan(0);
       expect(s.events.find(e => e.type === 'hit').owner.isEqual(s.attacker)).toBe(true);
       expect(s.fighters[1]!.hp).toBeLessThan(MAX_HP);
+      expect(s.players[0]!.totalDamage).toBeCloseTo(MAX_HP - s.fighters[1]!.hp);
+      expect(s.players[1]!.totalDamage).toBe(0);
     });
   it('does not emit damage cues for storm or sudden death', () => {
     const s = world('swing', GAME.suddenDeathS + 1, false);
@@ -50,11 +53,13 @@ describe('server damage cues', () => {
     expect(s.fighters[0]!.hp).toBeLessThan(MAX_HP);
     expect(s.fighters[1]!.hp).toBeLessThan(s.fighters[0]!.hp);
     expect(s.events.filter(e => e.type === 'damage')).toHaveLength(0);
+    expect(s.players.every(p => p.totalDamage === 0)).toBe(true);
   });
   it('includes lethal hits but never emits a self-hit cue', () => {
     const s = world(); s.fighters[1]!.hp = 1;
     stepBattle(s.ctx, s.room, 1 / GAME.tickHz);
     expect(s.fighters[1]!.hp).toBe(0);
+    expect(s.players[0]!.totalDamage).toBe(1);
     expect(s.events.filter(e => e.type === 'damage')).toHaveLength(1);
     expect(s.events.find(e => e.type === 'damage').owner.isEqual(s.attacker)).toBe(false);
   });

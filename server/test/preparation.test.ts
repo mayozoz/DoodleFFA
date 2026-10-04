@@ -29,6 +29,16 @@ function setup() {
 }
 
 describe('post-drawing preparation', () => {
+  it('resets total damage when starting a new round', () => {
+    const s = setup();
+    const db = s.ctx.db as any;
+    db.player.identity.update({ ...s.player, totalDamage: 750 });
+    for (const name of ['drawing', 'doodle', 'weapon', 'weaponVoice', 'fighter', 'input', 'projectile', 'abilityObject', 'fxEvent']) {
+      db[name] = { player: { delete: () => {} }, roomCode: { delete: () => {} } };
+    }
+    enterPhase(s.ctx, s.room, 'draw');
+    expect((s.player as any).totalDamage).toBe(0);
+  });
   it('assigns a valid random special and allows 60 seconds for the full sequence', () => {
     const s = setup();
     enterPhase(s.ctx, s.room, 'drop');

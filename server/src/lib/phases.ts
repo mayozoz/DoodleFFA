@@ -53,7 +53,7 @@ export function enterPhase(ctx: Ctx, r: RoomRow, phase: Phase) {
 /** Wipe one room's per-round data: drawings, doodles, weapons, fighters, inputs, projectiles, fx. */
 function resetRound(ctx: Ctx, code: string) {
   for (const p of ctx.db.player.roomCode.filter(code)) {
-    ctx.db.player.identity.update({ ...p, alive: true, dropX: -1, dropY: -1, placement: 0 });
+    ctx.db.player.identity.update({ ...p, alive: true, dropX: -1, dropY: -1, placement: 0, totalDamage: 0 });
     clearPlayerRoundRows(ctx, p.identity); // also wipes leftovers this identity has in other rooms
   }
   ctx.db.drawing.roomCode.delete(code);

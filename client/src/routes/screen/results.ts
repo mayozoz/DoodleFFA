@@ -51,7 +51,8 @@ export function resultsOverlay(el: HTMLElement, conn: DbConnection, code: string
       <div class="art"></div>
       <div class="pname">${drawMarkerSvg(p.marker, c.hex)}<span>${esc(p.name)}</span></div>
       <div class="wname">${esc(stored?.spec.name ?? 'Mystery Stick')}</div>
-      <div class="block"><span>${place}</span></div>`;
+      <div class="block"><span>${place}</span></div>
+      <div class="podium-damage"><strong>${Math.round(p.totalDamage).toLocaleString()}</strong><span>Total damage</span></div>`;
     podium.appendChild(step);
 
     void (async () => {

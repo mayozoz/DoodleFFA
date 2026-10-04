@@ -7,15 +7,28 @@ export const timeSeconds = (ctx: Ctx) => Number(ctx.timestamp.microsSinceUnixEpo
 export const effectsOf = (f: FighterRow): FighterEffects => JSON.parse(f.effects);
 export const hasEffect = (f: FighterRow, key: keyof FighterEffects, now: number) => (effectsOf(f)[key]?.until ?? 0) > now;
 export const hitRadius = (f: FighterRow, now: number) => GAME.hitRadius * (hasEffect(f, 'shrink', now) ? T.shrinkScale : 1);
-export function setEffect(f: FighterRow, key: keyof FighterEffects, until: number, dps?: number) {
+export function setEffect(f: FighterRow, key: keyof FighterEffects, until: number, dps?: number, source?: string) {
   const effects = effectsOf(f);
-  effects[key] = { until, ...(dps === undefined ? {} : { dps }) };
+  effects[key] = { until, ...(dps === undefined ? {} : { dps }), ...(source === undefined ? {} : { source }) };
   f.effects = JSON.stringify(effects);
 }
 export function damage(f: FighterRow, amount: number, now: number): number {
   if (f.hp <= 0 || hasEffect(f, 'invisible', now)) return 0;
   const dealt = Math.min(f.hp, Math.max(0, amount));
   f.hp -= dealt;
+  return dealt;
+}
+
+/** Persist actual opponent damage separately from short-lived visual events. */
+export function creditDamage(ctx: Ctx, victim: FighterRow, source: string | undefined, dealt: number) {
+  if (!source || source === victim.player.toHexString() || dealt <= 0) return;
+  const p = [...ctx.db.player.roomCode.filter(victim.roomCode)].find(p => p.identity.toHexString() === source);
+  if (p && p.roomCode === victim.roomCode) ctx.db.player.identity.update({ ...p, totalDamage: p.totalDamage + dealt });
+}
+
+export function dealOpponentDamage(ctx: Ctx, victim: FighterRow, source: string | undefined, amount: number, now: number): number {
+  const dealt = damage(victim, amount, now);
+  creditDamage(ctx, victim, source, dealt);
   return dealt;
 }
 /**
@@ -100,7 +113,7 @@ export function activateAbility(ctx: Ctx, r: RoomRow, f: FighterRow, all: Map<st
       moveFighter(ctx, r, f, f.x + ux * T.travelDistance, f.y + uy * T.travelDistance);
       if (id === 'dash') for (const o of enemies) {
         if (segmentDistance(o.x, o.y, ax, ay, f.x, f.y) > hitRadius(o, now) + 0.5) continue;
-        cue(ctx, r, o, damage(o, GAME.maxHp * T.dashDamageFraction, now));
+        cue(ctx, r, o, dealOpponentDamage(ctx, o, f.player.toHexString(), GAME.maxHp * T.dashDamageFraction, now));
         moveFighter(ctx, r, o, o.x + ux * T.knockbackDistance, o.y + uy * T.knockbackDistance);
       }
       break;
@@ -161,7 +174,7 @@ export function stepStatuses(ctx: Ctx, all: Map<string, FighterRow>, dt: number)
       // sim.ts keeps its own non-status state in the same JSON (knockback `kb`, queued attack `pa`)
       if (key === 'kb' || key === 'pa') continue;
       // Integrate only the portion of this tick before expiration.
-      if (effect.dps) damage(f, effect.dps * Math.max(0, Math.min(dt, effect.until - (now - dt))), now);
+      if (effect.dps) dealOpponentDamage(ctx, f, effect.source, effect.dps * Math.max(0, Math.min(dt, effect.until - (now - dt))), now);
       if (effect.until <= now) delete effects[key as keyof FighterEffects];
     }
     f.effects = JSON.stringify(effects);
@@ -214,7 +227,7 @@ export function stepAbilityObjects(ctx: Ctx, r: RoomRow, all: Map<string, Fighte
       if (['boomerang', 'hook', 'silence'].includes(d.kind)) {
         if (d.hits?.includes(id) || segmentDistance(o.x, o.y, ax, ay, row.x, row.y) > d.radius + hitRadius(o, now)) continue;
         d.hits!.push(id);
-        if (d.kind === 'boomerang') cue(ctx, r, o, damage(o, (weapons.get(row.owner.toHexString())?.stats.damagePerHit ?? 300), now));
+        if (d.kind === 'boomerang') cue(ctx, r, o, dealOpponentDamage(ctx, o, row.owner.toHexString(), (weapons.get(row.owner.toHexString())?.stats.damagePerHit ?? 300), now));
         if (d.kind === 'silence') { setEffect(o, 'silenced', now + 3); remove = true; }
         if (d.kind === 'hook') {
           if (owner) {
@@ -225,14 +238,14 @@ export function stepAbilityObjects(ctx: Ctx, r: RoomRow, all: Map<string, Fighte
         }
         if (remove) break;
       } else if (d.kind === 'ring') {
-        if (Math.abs(dist - d.radius) <= T.ringHalfWidth + hitRadius(o, now)) setEffect(o, 'burn', now + T.burnSeconds, GAME.stormDps);
+        if (Math.abs(dist - d.radius) <= T.ringHalfWidth + hitRadius(o, now)) setEffect(o, 'burn', now + T.burnSeconds, GAME.stormDps, row.owner.toHexString());
       } else if (dist <= d.radius + hitRadius(o, now)) {
-        if (d.kind === 'fire') setEffect(o, 'burn', now + T.burnSeconds, GAME.stormDps);
-        if (d.kind === 'mushroom') { setEffect(o, 'poison', now + T.poisonSeconds, T.poisonDps); remove = true; break; }
-        if (d.kind === 'drain' && owner && owner.hp > 0) owner.hp = Math.min(GAME.maxHp, owner.hp + damage(o, T.drainDps * dt, now));
+        if (d.kind === 'fire') setEffect(o, 'burn', now + T.burnSeconds, GAME.stormDps, row.owner.toHexString());
+        if (d.kind === 'mushroom') { setEffect(o, 'poison', now + T.poisonSeconds, T.poisonDps, row.owner.toHexString()); remove = true; break; }
+        if (d.kind === 'drain' && owner && owner.hp > 0) owner.hp = Math.min(GAME.maxHp, owner.hp + dealOpponentDamage(ctx, o, row.owner.toHexString(), T.drainDps * dt, now));
         if (d.kind === 'bomb') {
           const hits = bombHits.get(d.hits![0]!)!;
-          if (!hits.has(id)) { cue(ctx, r, o, damage(o, T.blastDamage, now)); hits.add(id); }
+          if (!hits.has(id)) { cue(ctx, r, o, dealOpponentDamage(ctx, o, row.owner.toHexString(), T.blastDamage, now)); hits.add(id); }
         }
       }
     }
