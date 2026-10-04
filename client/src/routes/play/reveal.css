@@ -1,0 +1,13 @@
+.weapon-reveal-page { flex: 1; overflow-y: auto; touch-action: pan-y; display: grid; align-items: center; padding: 20px 20px 92px; background: radial-gradient(ellipse at 50% 25%, color-mix(in srgb, var(--player) 12%, transparent), transparent 65%); }
+.controller-weapon-card { width: min(560px, 100%); margin: auto; gap: 12px; }
+.controller-weapon-card .who { font-size: 12px; letter-spacing: .18em; text-transform: uppercase; }
+.controller-weapon-card .what { font-size: clamp(26px, 5vw, 38px); text-align: center; }
+.controller-weapon-card .weapon-stage { width: min(48vmin, 250px); background: radial-gradient(circle, #ffffff0b, transparent 70%); }
+.weapon-description { color: #ccc7dd; font-size: 14px; line-height: 1.55; text-align: center; margin: 0; max-width: 440px; }
+.revealed-ability { display: flex; align-items: center; gap: 16px; width: 100%; border: 1px solid color-mix(in srgb, var(--player) 40%, transparent); border-radius: 20px; background: #ffffff05; padding: 18px; }
+.revealed-ability .style-icon { flex-shrink: 0; width: 56px; height: 56px; }
+.revealed-ability small { display: block; font-size: 10px; letter-spacing: .1em; color: var(--player); font-weight: 800; }
+.revealed-ability strong { display: block; font-size: 20px; margin: 6px 0; }
+.revealed-ability p { font-size: 13px; line-height: 1.5; margin: 0; color: #ccc7dd; }
+.controller-weapon-card .battle-hear { padding: 9px 16px; color: var(--fg); border: 1px solid #ffffff30; background: #ffffff08; border-radius: 99px; }
+@media (orientation: landscape) and (max-height: 500px) { .controller-weapon-card { width: min(720px, 100%); grid-template-columns: 180px 1fr; } .controller-weapon-card .weapon-stage { grid-column: 1; grid-row: 1 / 6; width: 180px; } .controller-weapon-card > :not(.weapon-stage) { grid-column: 2; } .controller-weapon-card[data-num] { display: grid; grid-template-columns: 1fr; } .controller-weapon-card[data-num] > * { grid-column: 1; } }

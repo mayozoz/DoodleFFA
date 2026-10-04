@@ -1,7 +1,7 @@
 import { DEBUG, debug, type Item } from '../../debug';
 import { secondsLeft, secondsOverdue } from '../../net/clock';
 import type { PlayCtx } from './types';
-import { RUN_GENERATION } from './draw';
+import { RUN_GENERATION, RUN_SPRITE_GENERATION } from './draw';
 
 /** Controller debug status (only with ?debug): phase timer, my drawing + weapon status. */
 export function mountPlayDebug(ctx: PlayCtx) {
@@ -23,7 +23,8 @@ export function mountPlayDebug(ctx: PlayCtx) {
         ? { level: w.status === 'pending' || w.status === 'generating' ? 'wait' : w.status === 'fallback' ? 'warn' : 'ok', text: `my weapon: ${w.status}${w.spec ? '' : ' (no spec yet)'}` }
         : { level: r.phase === 'draw' ? 'wait' : 'warn', text: 'my weapon: no drawing submitted yet' });
     }
-    if (!RUN_GENERATION) items.push({ level: 'warn', text: 'AI generation off (RUN_GENERATION = false) → every weapon uses the fallback' });
+    if (!RUN_GENERATION) items.push({ level: 'warn', text: 'AI spec generation off → gameplay uses drawing features' });
+    if (RUN_SPRITE_GENERATION && r.phase !== 'lobby') items.push({ level: w?.spriteUrl ? 'ok' : 'wait', text: w?.spriteUrl ? '2D weapon image ready' : '2D art pending or using original doodle' });
     return items;
   });
 }

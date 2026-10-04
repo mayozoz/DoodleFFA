@@ -11,6 +11,7 @@ export * from './reducers/input';
 export * from './reducers/tick';
 
 export * from './procedures/gen_spec';
+export { genSprite } from './procedures/gen_sprite';
 export * from './procedures/gen_sfx';
 export * from './procedures/gen_commentary';
 export * from './procedures/gen_announcement';

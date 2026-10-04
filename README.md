@@ -487,3 +487,24 @@ provide asynchronous damage feedback; a native iOS app would be needed for that.
 Check on hardware: join two players, attack without hitting (no vibration), hit the
 other player (victim only), take storm damage (no vibration), and leave/background
 the controller during a pulse (stops). iPhones should show the damage border.
+
+### Drawing to 2D weapon images
+
+`RUN_SPRITE_GENERATION = true` in `client/src/routes/play/draw.ts` sends each
+nonempty submitted drawing to the server's `gen_sprite` procedure. Gemini
+(`gemini-2.5-flash-image`) turns the doodle into filled, outlined, cel-shaded 2D
+weapon art while preserving its position, silhouette and colors. This runs
+independently of spec generation, so gameplay continues using drawing features.
+
+Set `GEMINI_API_KEY` in `.env`, publish the updated server, and load the key with
+`corepack pnpm tsx scripts/set-secrets.ts` (append `maincloud` for cloud). Regenerate
+bindings with `corepack pnpm stdb:generate` and rebuild/reload the client. The key
+stays in the private secrets table. Sprite images are stored inline in
+`weapon.spriteUrl`, so this flow needs no S3 credentials.
+
+The client removes the solid white background and displays the art in the phone weapon guide, on the shared
+Reveal screen, in battle, and on the results podium. Reveal cards update if art
+arrives after they mount. Requests time out after 30 seconds; missing keys,
+provider failures, and invalid/oversized output leave the original doodle visible.
+Responses after Reveal or from a different round/drawing are discarded.
+Use `?debug` to see `gen_sprite` progress or failures.

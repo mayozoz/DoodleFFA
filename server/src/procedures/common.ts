@@ -13,6 +13,7 @@ export interface GenJob {
   playerHex: string;
   roomCode: string;
   seed: number;
+  round: number;
   png: Uint8Array;
   features: DrawingFeatures | null;
   /** current weapon.spec JSON ('' if not ready) */
@@ -45,7 +46,7 @@ export function loadJob(ctx: PCtx, field: WeaponField): GenJob | null {
     try { features = JSON.parse(d.features) as DrawingFeatures; } catch { /* null */ }
 
     return {
-      player: ctx.sender, playerHex: ctx.sender.toHexString(), roomCode: p.roomCode, seed: r.seed,
+      player: ctx.sender, playerHex: ctx.sender.toHexString(), roomCode: p.roomCode, seed: r.seed, round: r.round,
       png: d.png, features, specJson: w.spec, secrets,
     };
   });
@@ -57,13 +58,18 @@ export function loadJob(ctx: PCtx, field: WeaponField): GenJob | null {
  *  - sprite / sfx: also during Reveal (Drop can end after 5 s now; a 3–5 s sound or a slower
  *    sprite still makes it into the showcase and the fight). Anything later is discarded.
  */
-export function writeIfStillPending(ctx: PCtx, field: WeaponField, value: string, markReady = false) {
+export function writeIfStillPending(ctx: PCtx, field: WeaponField, value: string, markReady = false, job?: GenJob) {
   ctx.withTx((tx) => {
     const w = tx.db.weapon.player.find(ctx.sender);
     const p = tx.db.player.identity.find(ctx.sender);
     const r = p && tx.db.room.code.find(p.roomCode);
     const open = field === 'spec' ? ['draw', 'drop'] : ['draw', 'drop', 'reveal'];
     if (!w || !r || !open.includes(r.phase) || w[field] !== '') return;
+    if (job) {
+      const d = tx.db.drawing.player.find(ctx.sender);
+      if (r.code !== job.roomCode || r.round !== job.round || r.seed !== job.seed ||
+          !d || d.png.length !== job.png.length || d.png.some((byte, i) => byte !== job.png[i])) return;
+    }
     tx.db.weapon.player.update({ ...w, [field]: value, ...(markReady ? { status: 'ready' } : {}) });
   });
 }

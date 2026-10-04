@@ -90,3 +90,43 @@ export const ABILITY_TUNING = {
   firePatchSpacing: 0.55,
   burnSeconds: 2,
 } as const;
+
+/** Disjoint pools let the existing player ability field retain a preferred play style. */
+export const ABILITY_STYLES = {
+  mobility: { name: 'Mobility', icon: '↗', description: 'Close the gap, reposition, and leave enemies behind.', abilities: ['flash', 'dash', 'fire_steps'] },
+  power: { name: 'Power', icon: '✦', description: 'Hit harder with explosive attacks and weapon boosts.', abilities: ['nuke1', 'nuke2', 'attack_boost', 'boomerang', 'rage', 'weapon_boost', 'fire_ring'] },
+  control: { name: 'Control', icon: '◎', description: 'Trap, interrupt, and pull opponents into your reach.', abilities: ['flashbang', 'mini_arena', 'mushrooms', 'silence', 'hook', 'freeze'] },
+  survival: { name: 'Survival', icon: '◇', description: 'Stay alive with concealment, healing, and evasive tricks.', abilities: ['smoke', 'invisible', 'life_drain', 'shrink'] },
+} as const satisfies Record<string, { name: string; icon: string; description: string; abilities: readonly AbilityId[] }>;
+export type AbilityStyle = keyof typeof ABILITY_STYLES;
+export function abilityStyle(id: string): AbilityStyle {
+  return (Object.keys(ABILITY_STYLES) as AbilityStyle[]).find(style =>
+    (ABILITY_STYLES[style].abilities as readonly string[]).includes(id)) ?? 'mobility';
+}
+/** Caller supplies server-seeded randomness; roll once at reveal, never on a UI render. */
+export function rollAbility(selected: string, random: () => number): AbilityId {
+  const pool = ABILITY_STYLES[abilityStyle(selected)].abilities;
+  return pool[Math.min(pool.length - 1, Math.max(0, Math.floor(random() * pool.length)))]!;
+}
+export const ABILITY_DESCRIPTIONS: Record<AbilityId, string> = {
+  flash: 'Leap forward in your movement direction to escape or close the gap.',
+  dash: 'Dash forward, damaging and knocking back opponents along your path.',
+  smoke: 'Create a smoke cloud for 4 seconds that prevents enemies from targeting fighters inside. You can still take damage.',
+  invisible: 'Become invisible and immune to damage for 2 seconds.',
+  flashbang: 'Flash the arena to briefly obscure opponents’ view for 2 seconds.',
+  fire_steps: 'Leave burning footprints behind you for 4 seconds. Enemies who cross them catch fire.',
+  nuke1: 'Send a wave of explosions outward from your position across the arena. Watch for the brief wind-up.',
+  nuke2: 'Sweep the arena with a line of explosions after a brief wind-up.',
+  attack_boost: 'Trade some health for stronger attacks for 5 seconds. Use carefully when your health is low.',
+  mini_arena: 'Raise temporary walls around your position for 5 seconds, trapping nearby fighters inside.',
+  boomerang: 'Throw a projectile forward that returns to you and can hit opponents on both passes.',
+  rage: 'Attack faster for 5 seconds.',
+  weapon_boost: 'Enlarge your weapon and extend its attack reach for 6 seconds.',
+  fire_ring: 'Surround yourself with a moving ring of fire for 4 seconds. Enemies touching its edge burn.',
+  mushrooms: 'Plant three poisonous traps beside you. They last up to 15 seconds and poison enemies who touch them.',
+  life_drain: 'Drain nearby enemies for 3 seconds, restoring health equal to the damage you deal.',
+  silence: 'Fire a projectile that blocks the first opponent’s attacks and abilities for 3 seconds.',
+  hook: 'Launch a hook that pulls the first opponent it hits toward you.',
+  freeze: 'Freeze opponents in a small area ahead of you for 3 seconds, stopping movement and attacks.',
+  shrink: 'Shrink for 6 seconds, making yourself a smaller target.',
+};

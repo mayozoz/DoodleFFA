@@ -34,6 +34,7 @@ export function mountReveal(el: HTMLElement, conn: DbConnection, code: string): 
   const timers: number[] = [];
   const clearStage = () => { stage?.destroy(); stage = null; timers.splice(0).forEach(clearTimeout); };
 
+  let active = true, artRevision = 0;
   let raf = 0;
   const frame = () => {
     const r = conn.db.room.code.find(code);
@@ -56,26 +57,37 @@ export function mountReveal(el: HTMLElement, conn: DbConnection, code: string): 
   const showWeapon = async (i: number, key: string) => {
     const e = entries[i];
     if (!e) return;
+    const version = ++artRevision;
     const c = colorForSlot(e.p.colorSlot);
     const card = document.createElement('div');
     card.className = 'reveal-card';
     card.innerHTML = `<div class="who" style="color:${c.hex}">${esc(e.p.name)}</div>`;
     const s = await weaponStage(await e.doodle, e.stored?.spec ?? null, { size: Math.min(innerHeight * 0.46, 420), upgradeLater: true });
-    if (shown !== key) { s.destroy(); return; } // moved on while it loaded
+    if (!active || shown !== key || version !== artRevision) { s.destroy(); return; } // moved on while it loaded
+    clearStage();
     stage = s;
     card.appendChild(s.el);
     const name = document.createElement('div');
     name.className = 'what';
     name.textContent = e.stored?.spec.name ?? '???';
     card.appendChild(name);
-    box.appendChild(card);
+    box.replaceChildren(card);
     // the moment: plain doodle → flash + upgrades → test swing, scaled to the slot length
     timers.push(window.setTimeout(() => void s.upgrade(), per * 220));
     timers.push(window.setTimeout(() => s.swing(), per * 560));
   };
 
+  const onWeaponUpdate: Parameters<typeof conn.db.weapon.onUpdate>[0] = (_ctx, old, next) => {
+    if (next.roomCode !== code || next.spriteUrl === old.spriteUrl) return;
+    const index = entries.findIndex(e => e.p.identity.isEqual(next.player));
+    const entry = entries[index];
+    if (!entry) return;
+    entry.doodle = loadDoodle({ spriteUrl: next.spriteUrl, png: doodles.get(next.player.toHexString()) }).catch(() => null);
+    if (shown === `w${index}`) void showWeapon(index, shown);
+  };
+  conn.db.weapon.onUpdate(onWeaponUpdate);
   frame();
-  return () => { cancelAnimationFrame(raf); clearStage(); box.remove(); };
+  return () => { active = false; conn.db.weapon.removeOnUpdate(onWeaponUpdate); cancelAnimationFrame(raf); clearStage(); box.remove(); };
 }
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[ch]!);

@@ -17,6 +17,8 @@ const SIZE = 512; // canvas resolution sent to the server
 export const RUN_GENERATION = false;
 /** Sound generation can run independently of spec and sprite generation. */
 export const RUN_SFX_GENERATION = true;
+/** Doodle → polished 2D art, independent of gameplay spec generation. */
+export const RUN_SPRITE_GENERATION = true;
 
 /** Doodle canvas with touch-friendly colors, eraser and undo. Submits when the phase ends. */
 export const drawView: View = (ctx) => {
@@ -150,6 +152,9 @@ export const drawView: View = (ctx) => {
       png,
       features: JSON.stringify(extractFeatures(drawing)),
     }));
+    if (RUN_SPRITE_GENERATION && drawing.strokes.length) {
+      void debug.track('gen_sprite', ctx.conn.procedures.genSprite({})).catch(() => {});
+    }
     if (RUN_GENERATION) {
       // Fire-and-forget. Results land in the weapon row; nothing is shown to players
       // (only the ?debug overlay lists them while they run).
