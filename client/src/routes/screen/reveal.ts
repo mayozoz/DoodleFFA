@@ -29,6 +29,8 @@ export function mountReveal(el: HTMLElement, conn: DbConnection, code: string): 
   const total = revealSeconds(n);
   let shown = '';
   let raf = 0;
+  let active = true;
+  let artRevision = 0;
   const frame = () => {
     const r = conn.db.room.code.find(code);
     if (r) {
@@ -49,23 +51,33 @@ export function mountReveal(el: HTMLElement, conn: DbConnection, code: string): 
   const showWeapon = async (i: number, key: string) => {
     const e = entries[i];
     if (!e) return;
+    const version = ++artRevision;
     const c = colorForSlot(e.p.colorSlot);
     const card = document.createElement('div');
     card.className = 'reveal-card';
     card.innerHTML = `<div class="who" style="color:${c.hex}">${esc(e.p.name)}</div>`;
     const art = await e.art;
-    if (shown !== key) return; // moved on while the art loaded
+    if (!active || shown !== key || version !== artRevision) return; // moved on while the art loaded
     card.appendChild(art);
     const name = document.createElement('div');
     name.className = 'what';
     name.textContent = e.stored?.spec.name ?? '???';
     card.appendChild(name);
-    box.appendChild(card);
+    box.replaceChildren(card);
     playTestSwing(art, e.stored?.spec.archetype ?? 'swing');
   };
 
+  const onWeaponUpdate: Parameters<typeof conn.db.weapon.onUpdate>[0] = (_ctx, old, next) => {
+    if (next.roomCode !== code || next.spriteUrl === old.spriteUrl) return;
+    const index = entries.findIndex((e) => e.p.identity.isEqual(next.player));
+    const entry = entries[index];
+    if (!entry) return;
+    entry.art = weaponArt({ spriteUrl: next.spriteUrl, png: doodles.get(next.player.toHexString()) }, entry.stored?.spec ?? null);
+    if (shown === `w${index}`) void showWeapon(index, shown);
+  };
+  conn.db.weapon.onUpdate(onWeaponUpdate);
   frame();
-  return () => { cancelAnimationFrame(raf); box.remove(); };
+  return () => { active = false; conn.db.weapon.removeOnUpdate(onWeaponUpdate); cancelAnimationFrame(raf); box.remove(); };
 }
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[ch]!);

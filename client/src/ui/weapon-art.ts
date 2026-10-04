@@ -18,8 +18,10 @@ export async function weaponArt(
   let canvas: HTMLCanvasElement | null = null;
   try {
     if (src.spriteUrl) canvas = await loadCutout(src.spriteUrl);
-    else if (src.png?.length) canvas = await loadCutout(src.png);
-  } catch { /* fall through to an empty stage */ }
+  } catch { /* use the original drawing if generated art cannot be decoded */ }
+  if (!canvas && src.png?.length) {
+    try { canvas = await loadCutout(src.png); } catch { /* empty stage */ }
+  }
   if (canvas) {
     const [gx, gy] = spec?.grip ?? [0.1, 0.5];
     const [tx, ty] = spec?.tip ?? [0.9, 0.5];

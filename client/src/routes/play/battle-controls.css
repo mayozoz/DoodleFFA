@@ -23,8 +23,26 @@
 .battle-hear { position: absolute; top: max(36px, calc(env(safe-area-inset-top) + 28px)); right: max(12px, env(safe-area-inset-right));
   z-index: 1; padding: 6px 12px; border-radius: 999px; border: 1px solid #ffffff66; background: #ffffff10; color: #fff;
   font-size: 13px; font-weight: 700; }
-.battle-attack-zone { gap: 12px; }
-/* Special ability: outline pill under the sword, same minimal language as the attack button */
-.battle-special { padding: 8px 14px; border-radius: 999px; border: 1.5px solid #ffffffb3; background: #ffffff08;
-  color: #fff; font-size: 14px; font-weight: 800; max-width: 46vw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.battle-special:disabled { opacity: .5; }
+
+.battle-attack-zone { display: flex; flex-direction: row; justify-content: center; align-items: center; gap: clamp(12px, 3vw, 32px); padding: 64px 16px 32px; }
+.battle-attack-frame { width: clamp(110px, 36vmin, 230px); flex-shrink: 0; }
+.battle-special-group { display: grid; justify-items: center; gap: 10px; width: clamp(90px, 19vw, 165px); }
+.battle-special-frame { position: relative; width: clamp(76px, 23vmin, 130px); aspect-ratio: 1; color: var(--player); }
+.battle-special { position: absolute; inset: 8%; width: 84%; height: 84%; border-radius: 50%; padding: 6px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; border: 1.5px solid var(--player); background: color-mix(in srgb, var(--player) 12%, var(--bg)); color: var(--player); touch-action: none; cursor: pointer; box-shadow: 0 0 24px color-mix(in srgb, var(--player) 12%, transparent); }
+#special-icon { font-size: clamp(24px, 7vmin, 42px); line-height: 1; }
+#special-state { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; }
+.battle-special:disabled { opacity: .45; cursor: default; box-shadow: none; }
+.battle-special:focus-visible { outline: 2px solid var(--player); outline-offset: 4px; }
+.battle-special-copy { text-align: center; }
+.battle-special-copy strong, .battle-special-copy span { display: block; }
+.battle-special-copy strong { font-size: 13px; color: var(--player); }
+.battle-special-copy span { font-size: 11px; color: var(--muted); margin-top: 3px; }
+.battle-special-copy p { color: #ccc7dd; font-size: 11px; line-height: 1.4; margin: 6px 0 0; }
+.battle-weapon-info { position: absolute; top: max(44px, calc(env(safe-area-inset-top) + 38px)); left: max(16px, env(safe-area-inset-left)); width: min(42vw, 340px); display: flex; align-items: center; gap: 12px; pointer-events: none; z-index: 1; }
+#weapon-picture { width: clamp(40px, 12vmin, 70px); flex-shrink: 0; }
+#weapon-picture .weapon-stage { width: 100%; }
+.battle-info-label { font-size: 9px; letter-spacing: .14em; color: var(--muted); }
+.battle-weapon-info strong { display: block; font-size: 14px; margin: 3px 0; }
+.battle-weapon-info p { font-size: 11px; line-height: 1.4; color: #ccc7dd; margin: 0; }
+@media (orientation: portrait) { .battle-attack-zone { flex-direction: column; gap: 16px; padding: 140px 8px 52px; } .battle-special-group { width: 100%; } .battle-weapon-info { width: calc(100vw - 32px); top: 70px; } .battle-special-copy p { max-width: 170px; } }
+@media (max-height: 350px) and (orientation: landscape) { .battle-special-copy p { display: none; } .battle-weapon-info p { font-size: 10px; } }

@@ -241,7 +241,7 @@ export class Arena {
     v.char.hand.addChild(v.weapon);
   }
 
-  /** Generated sprite from S3. Cut out the white too: server-side background removal isn't built. */
+  /** Generated sprite (inline or hosted). Cut out the white too: server-side background removal isn't built. */
   private async loadUrl(url: string): Promise<Texture | null> {
     return this.cachedCutout(url, url);
   }

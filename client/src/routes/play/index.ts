@@ -8,7 +8,7 @@ import { joinView } from './join';
 import { drawView } from './draw';
 import { dropView } from './drop';
 import { battleView } from './battle';
-import { waitingView } from './waiting';
+import { loadoutView } from './loadout';
 import { resultsView } from './results';
 import { revealView } from './reveal';
 import { mountPlayDebug } from './debug-status';
@@ -20,7 +20,7 @@ import { ControllerAudio } from './audio';
 // swaps one full-screen view per phase.
 
 const VIEWS: Record<Phase, View> = {
-  lobby: waitingView('You\'re in! Watch the big screen.'),
+  lobby: loadoutView,
   draw: drawView,
   drop: dropView,
   reveal: revealView,

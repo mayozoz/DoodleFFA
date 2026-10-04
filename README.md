@@ -103,7 +103,7 @@ Then set `VITE_STDB_URI=wss://maincloud.spacetimedb.com` in `.env`.
 | `VITE_STDB_URI` | client | `ws://localhost:3000` locally, `wss://maincloud.spacetimedb.com` in prod |
 | `VITE_STDB_DB` | client, scripts | database name, default `doodle-arena` |
 | `VITE_PUBLIC_URL` | client (`/screen`) | base URL in the QR code; your LAN IP in dev |
-| `ASI_ONE_API_KEY`, `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`, `AWS_*`, `S3_BUCKET`, `ASSET_BASE_URL` | **server, via the `secrets` table** | the module doesn't read these from env; load them with `set-secrets` |
+| `ASI_ONE_API_KEY`, `GEMINI_API_KEY`, `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`, `AWS_*`, `S3_BUCKET`, `ASSET_BASE_URL` | **server, via the `secrets` table** | the module doesn't read these from env; load them with `set-secrets` |
 
 Only `VITE_*` variables reach the browser. **Never put an API key in a `VITE_` variable.**
 
@@ -357,7 +357,7 @@ Add a JSON file in `packages/spec/fixtures/` with the `weapon` object only. Add 
 ### Weapon sound effects
 
 `RUN_SFX_GENERATION = true` in `client/src/routes/play/draw.ts` enables sound
-independently while `RUN_GENERATION = false` keeps spec/sprite generation off.
+independently while `RUN_GENERATION = false` keeps spec generation off. Sprite generation is enabled independently.
 When full generation is enabled, sound generation waits for the spec so it can
 use the weapon's custom `sfx_prompt`. Without a spec, it uses a generic swing
 prompt. The server calls ElevenLabs `/v1/sound-generation` with a one-second
@@ -466,3 +466,24 @@ Landing hits in a row without being hit builds a combo (2 hits = ×2 combo, and 
 - **Arena:** a "×3 COMBO" pop above the attacker that grows with n, a glow on their ground ring that intensifies with n, and a shatter effect on combo break.
 - **Scoreboard** (`client/src/routes/screen/scoreboard.ts`): a 🔥×n badge next to the player's name while the combo lasts.
 - **Decided (2026-10-03):** storm and sudden-death damage break a combo. Combos don't time out. Hits inside one hit window count as one step, and the window equals the round's longest weapon cooldown.
+
+### Drawing to 2D weapon images
+
+`RUN_SPRITE_GENERATION = true` in `client/src/routes/play/draw.ts` sends each
+nonempty submitted drawing to the server's `gen_sprite` procedure. Gemini
+(`gemini-2.5-flash-image`) turns the doodle into filled, outlined, cel-shaded 2D
+weapon art while preserving its position, silhouette and colors. This runs
+independently of spec generation, so gameplay continues using drawing features.
+
+Set `GEMINI_API_KEY` in `.env`, publish the updated server, and load the key with
+`corepack pnpm tsx scripts/set-secrets.ts` (append `maincloud` for cloud). Regenerate
+bindings with `corepack pnpm stdb:generate` and rebuild/reload the client. The key
+stays in the private secrets table. Sprite images are stored inline in
+`weapon.spriteUrl`, so this flow needs no S3 credentials.
+
+The client removes the solid white background and displays the art on both
+Reveal screens, in battle, and on the results podium. Reveal cards update if art
+arrives after they mount. Requests time out after 30 seconds; missing keys,
+provider failures, and invalid/oversized output leave the original doodle visible.
+Responses after Reveal or from a different round/drawing are discarded.
+Use `?debug` to see `gen_sprite` progress or failures.

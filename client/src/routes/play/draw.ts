@@ -10,6 +10,8 @@ const SIZE = 512; // canvas resolution sent to the server
 export const RUN_GENERATION = false;
 /** Sound generation can run independently of spec and sprite generation. */
 export const RUN_SFX_GENERATION = true;
+/** Doodle → polished 2D art, independent of gameplay spec generation. */
+export const RUN_SPRITE_GENERATION = true;
 
 /** 20 s doodle canvas: 4 colors + undo, border in player color. Submits when the phase ends. */
 export const drawView: View = (ctx) => {
@@ -39,6 +41,14 @@ export const drawView: View = (ctx) => {
     for (const s of drawing.strokes) {
       g.strokeStyle = s.color;
       g.lineWidth = s.width;
+      if (s.points.length === 1) {
+        const [x, y] = s.points[0]!;
+        g.fillStyle = s.color;
+        g.beginPath();
+        g.arc(x, y, s.width / 2, 0, Math.PI * 2);
+        g.fill();
+        continue;
+      }
       g.beginPath();
       s.points.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y)));
       g.stroke();
@@ -53,6 +63,7 @@ export const drawView: View = (ctx) => {
     t0 = performance.now();
     cur = { color, width: 10, points: [[...pos(e), 0]] };
     drawing.strokes.push(cur);
+    redraw();
   };
   canvas.onpointermove = (e) => {
     if (!cur) return;
@@ -81,6 +92,9 @@ export const drawView: View = (ctx) => {
       png,
       features: JSON.stringify(extractFeatures(drawing)),
     }));
+    if (RUN_SPRITE_GENERATION && drawing.strokes.length) {
+      void debug.track('gen_sprite', ctx.conn.procedures.genSprite({})).catch(() => {});
+    }
     if (RUN_GENERATION) {
       // Fire-and-forget. Results land in the weapon row; nothing is shown to players
       // (only the ?debug overlay lists them while they run).

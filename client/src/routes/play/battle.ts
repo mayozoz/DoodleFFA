@@ -1,12 +1,14 @@
 import { Timestamp } from 'spacetimedb';
 import nipplejs from 'nipplejs';
-import { ABILITIES, ABILITY_TUNING, isAbilityId, MAX_HP, type StoredWeapon } from '@doodle/spec';
+import { ABILITIES, ABILITY_DESCRIPTIONS, ABILITY_STYLES, abilityStyle, ABILITY_TUNING, isAbilityId, MAX_HP, type StoredWeapon } from '@doodle/spec';
 import { secondsLeft } from '../../net/clock';
 import { haptic } from '../../ui/haptics';
 import { click, resumeAudio } from '../../audio/sfx';
 import { mountRotateHint } from '../../ui/rotate-hint';
 import type { View } from './types';
 import './battle-controls.css';
+import { weaponArt } from '../../ui/weapon-art';
+import { weaponDescription } from '../../ui/weapon-description';
 
 const SEND_HZ = 20;
 
@@ -18,6 +20,7 @@ export const battleView: View = (ctx) => {
         <div id="hpfill" style="height:100%;width:100%;background:var(--player)"></div>
       </div>
       <button id="hear-weapon" class="battle-hear" aria-label="Hear your weapon">Hear weapon</button>
+      <div class="battle-weapon-info"><div id="weapon-picture"></div><div><span class="battle-info-label">YOUR WEAPON</span><strong id="weapon-name"></strong><p id="weapon-description"></p></div></div>
       <div id="stick" class="battle-stick-zone" aria-label="Movement area"></div>
       <div class="battle-attack-zone">
         <div class="battle-attack-frame">
@@ -32,7 +35,13 @@ export const battleView: View = (ctx) => {
             <circle id="ring" cx="50" cy="50" r="47" fill="none" stroke="#fff" stroke-width="2" pathLength="1" stroke-dasharray="1" stroke-dashoffset="0"/>
           </svg>
         </div>
-          <button id="special" class="battle-special" aria-label="Special ability">Special · 2/2</button>
+          <div class="battle-special-group">
+            <div class="battle-special-frame">
+              <button id="special" class="battle-special" disabled aria-label="Special ability" aria-describedby="special-description"><span id="special-icon" aria-hidden="true">✦</span><span id="special-state">Waiting</span></button>
+              <svg class="battle-sword-cooldown" viewBox="0 0 100 100" aria-hidden="true"><circle id="special-ring" cx="50" cy="50" r="47" fill="none" stroke="currentColor" stroke-width="3" pathLength="1" stroke-dasharray="1" /></svg>
+            </div>
+            <div class="battle-special-copy"><strong id="special-name">Special ability</strong><span id="special-charges"></span><p id="special-description"></p></div>
+          </div>
       </div>
     </div>`;
 
@@ -82,15 +91,40 @@ export const battleView: View = (ctx) => {
     if (current.player.isEqual(ctx.identity) && current.hp < previous.hp) haptic(50);
   };
   ctx.conn.db.fighter.onUpdate(onDamage);
+  let artRevision = 0;
+  const renderWeapon = () => {
+    const w = ctx.conn.db.weapon.player.find(ctx.identity);
+    const d = ctx.conn.db.doodle.player.find(ctx.identity);
+    const stored = w?.spec ? JSON.parse(w.spec) as StoredWeapon : null;
+    ctx.el.querySelector('#weapon-name')!.textContent = stored?.spec.name ?? 'Mystery Stick';
+    ctx.el.querySelector('#weapon-description')!.textContent = weaponDescription(stored?.spec ?? null);
+    const revision = ++artRevision;
+    void weaponArt({ spriteUrl: w?.spriteUrl, png: d?.png }, stored?.spec ?? null).then(art => {
+      if (!active || revision !== artRevision) return;
+      art.setAttribute('role', 'img');
+      art.setAttribute('aria-label', stored?.spec.name ?? 'Your drawn weapon');
+      ctx.el.querySelector('#weapon-picture')!.replaceChildren(art);
+    });
+  };
+  const onWeaponUpdate: Parameters<typeof ctx.conn.db.weapon.onUpdate>[0] = (_e, _old, next) => { if (next.player.isEqual(ctx.identity)) renderWeapon(); };
+  ctx.conn.db.weapon.onUpdate(onWeaponUpdate);
+  renderWeapon();
   const special = ctx.el.querySelector<HTMLButtonElement>('#special')!;
   special.onpointerdown = () => {
     if (special.disabled) return;
+    special.animate([{ transform: 'scale(1)' }, { transform: 'scale(.9)' }, { transform: 'scale(1)' }], { duration: 160 });
     click(); haptic(25);
     void ctx.conn.reducers.pressAbility({});
   };
 
   // Cooldown ring + HP from our own fighter row.
   const ring = ctx.el.querySelector<SVGCircleElement>('#ring')!;
+  const specialRing = ctx.el.querySelector<SVGCircleElement>('#special-ring')!;
+  const specialName = ctx.el.querySelector<HTMLElement>('#special-name')!;
+  const specialState = ctx.el.querySelector<HTMLElement>('#special-state')!;
+  const specialCharges = ctx.el.querySelector<HTMLElement>('#special-charges')!;
+  const specialDescription = ctx.el.querySelector<HTMLElement>('#special-description')!;
+  const specialIcon = ctx.el.querySelector<HTMLElement>('#special-icon')!;
   const hpFill = ctx.el.querySelector<HTMLDivElement>('#hpfill')!;
   let raf = 0;
   const loop = () => {
@@ -102,8 +136,14 @@ export const battleView: View = (ctx) => {
       const effects = JSON.parse(f.effects) as Record<string, { until: number }>;
       const statusLocked = ['silenced', 'frozen'].some(key => effects[key] && secondsLeft(new Timestamp(BigInt(Math.round(effects[key]!.until * 1e6)))) > 0);
       special.disabled = f.hp <= 0 || f.abilityCharges === 0 || abilityLeft > 0 || statusLocked;
-      special.style.opacity = special.disabled ? '0.5' : '1';
-      special.textContent = `${ability.name} · ${f.abilityCharges}/${ABILITY_TUNING.charges}${abilityLeft > 0 ? ` · ${Math.ceil(abilityLeft)}s` : statusLocked ? ' · Blocked' : ''}`;
+      specialName.textContent = ability.name;
+      specialIcon.textContent = ABILITY_STYLES[abilityStyle(f.abilityId)].icon;
+      specialDescription.textContent = ABILITY_DESCRIPTIONS[isAbilityId(f.abilityId) ? f.abilityId : 'flash'];
+      specialCharges.textContent = `${f.abilityCharges}/${ABILITY_TUNING.charges} uses left`;
+      const state = f.hp <= 0 ? 'Out' : f.abilityCharges === 0 ? 'Empty' : statusLocked ? 'Blocked' : abilityLeft > 0 ? `${Math.ceil(abilityLeft)}s` : 'Ready';
+      specialState.textContent = state;
+      special.setAttribute('aria-label', `${ability.name}: ${state}, ${f.abilityCharges} uses left`);
+      specialRing.style.strokeDashoffset = String(Math.min(1, Math.max(0, abilityLeft / ability.cooldown)));
       hpFill.style.width = `${Math.max(0, (f.hp / MAX_HP) * 100)}%`;
       const rage = effects.rage && secondsLeft(new Timestamp(BigInt(Math.round(effects.rage.until * 1e6)))) > 0;
       const cd = (w?.spec ? (JSON.parse(w.spec) as StoredWeapon).stats.cooldown : 0.6) / (rage ? ABILITY_TUNING.attackSpeedMultiplier : 1);
@@ -116,6 +156,7 @@ export const battleView: View = (ctx) => {
 
   return () => {
     ctx.conn.db.fighter.removeOnUpdate(onDamage);
+    ctx.conn.db.weapon.removeOnUpdate(onWeaponUpdate);
     active = false;
     clearInterval(sender);
     cancelAnimationFrame(raf);
