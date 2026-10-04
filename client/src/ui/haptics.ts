@@ -3,12 +3,12 @@ let edge: HTMLDivElement | null = null;
 let edgeTimer: ReturnType<typeof setTimeout> | undefined;
 
 export function haptic(ms = 15) {
-  // Keep the call synchronous with the user's press, as required by browsers.
+  // Browsers require a prior user interaction before vibration is allowed.
   if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
     try {
       if (navigator.vibrate(ms)) return;
     } catch {
-      // A denied/unsupported vibration must never prevent an attack.
+      // A denied/unsupported vibration must never interrupt the controller.
     }
   }
   if (!edge) {
