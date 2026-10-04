@@ -1,7 +1,7 @@
 import nipplejs from 'nipplejs';
 import { MAX_HP, type StoredWeapon } from '@doodle/spec';
 import { secondsLeft } from '../../net/clock';
-import { haptic } from '../../ui/haptics';
+import { mountDamageFeedback } from './damage-feedback';
 import { click } from '../../audio/sfx';
 import { mountRotateHint } from '../../ui/rotate-hint';
 import type { View } from './types';
@@ -55,12 +55,14 @@ export const battleView: View = (ctx) => {
     void ctx.conn.reducers.setInput(want);
   }, 1000 / SEND_HZ);
 
-  // Every press: local bounce + click + haptic, even during cooldown. Server buffers one press.
+  const stopDamageFeedback = mountDamageFeedback(ctx);
+
+  // Every press: local bounce + click. Vibration is reserved for received damage.
   const btn = ctx.el.querySelector<HTMLButtonElement>('#atk')!;
   btn.onpointerdown = () => {
     btn.animate([{ scale: 1 }, { scale: 0.9 }, { scale: 1 }], { duration: 120 });
     click();
-    haptic(15);
+
     void ctx.conn.reducers.pressAttack({});
   };
 
@@ -82,6 +84,7 @@ export const battleView: View = (ctx) => {
   loop();
 
   return () => {
+    stopDamageFeedback();
     clearInterval(sender);
     cancelAnimationFrame(raf);
     stick.destroy();

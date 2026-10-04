@@ -52,6 +52,8 @@ export async function mount(el: HTMLElement) {
         `SELECT * FROM room WHERE code = '${code}'`,
         `SELECT * FROM player WHERE room_code = '${code}'`,
         `SELECT * FROM fighter WHERE player = 0x${me}`,
+        // Only opponent-inflicted damage addressed to this controller.
+        `SELECT * FROM fx_event WHERE room_code = '${code}' AND owner = 0x${me} AND type = 'damage'`,
         // own weapon only — needed for the cooldown ring (stats.cooldown)
         `SELECT * FROM weapon WHERE player = 0x${me}`,
         // own doodle — shown on the reveal weapon card

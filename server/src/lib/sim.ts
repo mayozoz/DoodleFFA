@@ -181,6 +181,11 @@ function applyHit(wd: World, attackerId: string, o: FighterRow, from: { x: numbe
   if (!w || o.hp <= 0) return;
   const dmg = rollDamage(w.stats.damagePerHit, wd.rand, BALANCE) * mul;
   o.hp -= dmg;
+  // Controller cue: owner is the VICTIM. Only actual damage from another player
+  // emits this event; storm/sudden-death HP loss never passes through applyHit.
+  if (dmg > 0 && attackerId !== o.player.toHexString()) {
+    emitFx(wd.ctx, wd.r.code, 'damage', o.x, o.y, o.player, dmg);
+  }
   // fx owner = the ATTACKER (screen shake scales with their weapon; commentary needs who hit whom)
   emitFx(wd.ctx, wd.r.code, 'hit', o.x, o.y, attacker?.player ?? o.player, dmg);
   // Knockback: initial speed whose per-tick decaying steps sum to exactly the knockback

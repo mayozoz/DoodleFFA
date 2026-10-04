@@ -376,3 +376,22 @@ Landing hits in a row without being hit builds a combo (2 hits = ×2 combo, and 
 - **Arena:** a "×3 COMBO" pop above the attacker that grows with n, a glow on their ground ring that intensifies with n, and a shatter effect on combo break.
 - **Scoreboard** (`client/src/routes/screen/scoreboard.ts`): a 🔥×n badge next to the player's name while the combo lasts.
 - **Decided (2026-10-03):** storm and sudden-death damage break a combo. Combos don't time out. Hits inside one hit window count as one step, and the window equals the round's longest weapon cooldown.
+
+## Damage feedback on phones
+
+Controllers vibrate only for live, server-confirmed damage from another player
+(melee, projectiles, boomerangs, and splash hits). Attacking, moving, storm damage,
+sudden death, and subscription snapshots do not vibrate. Burst hits are limited
+to one short double pulse every 220 ms; leaving battle or hiding the page cancels
+feedback. The server and client must both be updated for the damage cue.
+
+The controller also flashes its border on damage, including when vibration is
+unsupported or blocked. Android browsers with navigator.vibrate can use the motor
+after a normal page interaction such as joining. Device settings can still suppress
+vibration. iPhone/iPad Safari cannot automatically vibrate or trigger ringtone
+vibration from a web game. Safari switch haptics require user activation and do not
+provide asynchronous damage feedback; a native iOS app would be needed for that.
+
+Check on hardware: join two players, attack without hitting (no vibration), hit the
+other player (victim only), take storm damage (no vibration), and leave/background
+the controller during a pulse (stops). iPhones should show the damage border.
