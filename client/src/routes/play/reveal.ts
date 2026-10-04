@@ -1,7 +1,8 @@
 import { REVEAL, type StoredWeapon } from '@doodle/spec';
 import { secondsLeft } from '../../net/clock';
 import { resumeAudio } from '../../audio/sfx';
-import { ATTACK_VERB, playTestSwing, weaponArt } from '../../ui/weapon-art';
+import { ATTACK_VERB } from '../../ui/weapon-art';
+import { loadDoodle, weaponStage, type WeaponStage } from '../../ui/weapon-stage';
 import { mountRotateHint } from '../../ui/rotate-hint';
 import type { View } from './types';
 
@@ -20,13 +21,16 @@ export const revealView: View = (ctx) => {
   const archetype = stored?.spec.archetype ?? 'swing';
   let active = true;
 
-  let art: HTMLElement | null = null;
-  void weaponArt({ spriteUrl: w?.spriteUrl, png: d?.png }, stored?.spec ?? null).then((a) => {
-    if (!active || card.dataset.num) return; // countdown already took over
-    art = a;
-    a.style.width = 'min(78vmin, 420px)'; // phones: the weapon is the star of this screen
+  let stage: WeaponStage | null = null;
+  const timers: number[] = [];
+  void (async () => {
+    const doodle = await loadDoodle({ spriteUrl: w?.spriteUrl, png: d?.png }).catch(() => null);
+    // phones: the weapon is the star of this screen
+    const s = await weaponStage(doodle, stored?.spec ?? null, { size: Math.min(innerWidth * 0.78, innerHeight * 0.5, 420), upgradeLater: true });
+    if (!active || card.dataset.num) { s.destroy(); return; } // left / countdown already took over
+    stage = s;
     card.innerHTML = '<div class="who" style="color:var(--player)">Your weapon</div>';
-    card.appendChild(a);
+    card.appendChild(s.el);
     const name = document.createElement('div');
     name.className = 'what';
     name.textContent = stored?.spec.name ?? 'Mystery Stick';
@@ -51,10 +55,12 @@ export const revealView: View = (ctx) => {
       hear.textContent = played ? 'Hear again' : 'Tap to retry';
     };
     card.appendChild(hear);
-    playTestSwing(a, archetype);
-  });
+    // the Reveal moment on your own phone: flash + upgrades, then a test swing
+    timers.push(window.setTimeout(() => void s.upgrade(), 450));
+    timers.push(window.setTimeout(() => s.swing(), 1100));
+  })();
   // Replay the test swing every couple of seconds so it reads as "alive".
-  const swing = setInterval(() => { if (art?.isConnected) playTestSwing(art, archetype); }, 2400);
+  const swing = setInterval(() => { if (stage?.el.isConnected) stage.swing(); }, 2400);
 
   // Same 3‥2‥1 as the big screen. The countdown is always the last 3 s of Reveal
   // (REVEAL.countdownS), so the controller doesn't need to know how many weapons there are.
@@ -67,11 +73,11 @@ export const revealView: View = (ctx) => {
       if (showing) {
         const num = Math.max(1, Math.ceil(left));
         const html = `<div class="countdown-big" style="color:var(--player)">${num}</div>`;
-        if (card.dataset.num !== String(num)) { card.dataset.num = String(num); card.innerHTML = html; }
+        if (card.dataset.num !== String(num)) { card.dataset.num = String(num); card.innerHTML = html; stage?.destroy(); stage = null; }
       }
     }
     raf = requestAnimationFrame(frame);
   };
   frame();
-  return () => { active = false; clearInterval(swing); cancelAnimationFrame(raf); unhint(); };
+  return () => { active = false; clearInterval(swing); timers.forEach(clearTimeout); cancelAnimationFrame(raf); stage?.destroy(); unhint(); };
 };

@@ -37,5 +37,19 @@
     "#ff8fc7",
     "#3cb043"
   ],
-  "sfx_prompt": "soft whoosh of spinning petals"
+  "sfx_prompt": "soft whoosh of spinning petals",
+  "decor": [
+    {
+      "type": "vines",
+      "at": "blade",
+      "color": "#3cb043",
+      "intensity": 0.7
+    },
+    {
+      "type": "halo",
+      "at": "tip",
+      "color": "#ff8fc7",
+      "intensity": 0.6
+    }
+  ]
 }

@@ -47,4 +47,20 @@ describe('validateWeaponSpec', () => {
     }, DEFAULT_SWING);
     expect(spec.vfx.map((v) => v.type)).toEqual(['poison']);
   });
+
+  it('keeps valid decor, drops unknown/duplicate types, caps at 3, fills color from the palette', () => {
+    const { spec } = validateWeaponSpec({
+      ...DEFAULT_SWING, palette: ['#ff0000'],
+      decor: [
+        { type: 'flames', at: 'edge', color: '#ff5500', intensity: 0.8 },
+        { type: 'lasers', at: 'tip', color: '#00ff00', intensity: 1 },
+        { type: 'flames', at: 'tip', color: '#ffffff', intensity: 0.1 },
+        { type: 'gem', at: 'nowhere', color: 'red', intensity: 7 },
+        { type: 'halo', at: 'tip', color: '#ffffff', intensity: 0.5 },
+        { type: 'wings', at: 'grip', color: '#ffffff', intensity: 0.5 },
+      ],
+    }, DEFAULT_SWING);
+    expect(spec.decor.map((d) => d.type)).toEqual(['flames', 'gem', 'halo']);
+    expect(spec.decor[1]).toMatchObject({ at: 'grip', color: '#ff0000', intensity: 0.7 });
+  });
 });

@@ -1,6 +1,6 @@
 import { colorForSlot, type StoredWeapon } from '@doodle/spec';
 import type { DbConnection } from '../../module_bindings';
-import { playTestSwing, weaponArt } from '../../ui/weapon-art';
+import { loadDoodle, weaponStage, type WeaponStage } from '../../ui/weapon-stage';
 import { drawMarkerSvg } from '../../ui/marker-svg';
 
 /**
@@ -30,6 +30,8 @@ export function resultsOverlay(el: HTMLElement, conn: DbConnection, code: string
   const podium = el.querySelector<HTMLDivElement>('.podium')!;
   if (ranked[0]) el.querySelector<HTMLDivElement>('.results-title')!.style.color = colorForSlot(ranked[0].colorSlot).hex;
 
+  const stages: WeaponStage[] = [];
+  let alive = true;
   // visual order: 2nd, 1st, 3rd
   const order = [ranked[1], ranked[0], ranked[2]];
   const RISE_DELAY = [0.35, 0.7, 0]; // 3rd rises first, then 2nd, then 1st
@@ -52,15 +54,20 @@ export function resultsOverlay(el: HTMLElement, conn: DbConnection, code: string
       <div class="block"><span>${place}</span></div>`;
     podium.appendChild(step);
 
-    void weaponArt({ spriteUrl: w?.spriteUrl, png: doodles.get(p.identity.toHexString()) }, stored?.spec ?? null, { orient: false }).then((art) => {
-      step.querySelector('.art')!.appendChild(art);
+    void (async () => {
+      const doodle = await loadDoodle({ spriteUrl: w?.spriteUrl, png: doodles.get(p.identity.toHexString()) }).catch(() => null);
+      // upgraded weapon, exactly as drawn (no rotation)
+      const s = await weaponStage(doodle, stored?.spec ?? null, { size: place === 1 ? 210 : 150, orient: false });
+      if (!alive) { s.destroy(); return; }
+      stages.push(s);
+      step.querySelector('.art')!.appendChild(s.el);
       // winner shows off once their block has risen
-      if (place === 1) setTimeout(() => playTestSwing(art, stored?.spec.archetype ?? 'swing'), (RISE_DELAY[slot]! + 0.6) * 1000);
-    });
+      if (place === 1) setTimeout(() => s.swing(), (RISE_DELAY[slot]! + 0.6) * 1000);
+    })();
   });
 
   el.querySelector<HTMLButtonElement>('#again')!.onclick = () => void conn.reducers.startRound({});
-  return () => {};
+  return () => { alive = false; stages.forEach((s) => s.destroy()); };
 }
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[ch]!);

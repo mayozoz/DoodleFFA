@@ -1,12 +1,13 @@
-import { colorForSlot, revealSeconds, revealSlot, type StoredWeapon } from '@doodle/spec';
+import { colorForSlot, revealSeconds, revealSlot, REVEAL, type StoredWeapon } from '@doodle/spec';
 import type { DbConnection } from '../../module_bindings';
 import { secondsLeft } from '../../net/clock';
-import { playTestSwing, weaponArt } from '../../ui/weapon-art';
+import { loadDoodle, weaponStage, type WeaponStage } from '../../ui/weapon-stage';
 
 /**
- * Reveal on the shared screen: "Behold…" → each weapon in turn (owner in their color, weapon art
- * with a test swing, weapon name) → 3‥2‥1. Timing comes from the shared revealSlot(), which the
- * server also used to set the phase length, so it lines up with the phones.
+ * Reveal on the shared screen: "Behold…" → each weapon in turn → 3‥2‥1.
+ * Each weapon's moment: the plain doodle appears, a flash, its upgrades pop on (the AI's
+ * decorations — the sketch itself is never changed), then a real test swing. Timing comes from
+ * the shared revealSlot(), which the server used to set the phase length.
  */
 export function mountReveal(el: HTMLElement, conn: DbConnection, code: string): () => void {
   const box = document.createElement('div');
@@ -15,19 +16,24 @@ export function mountReveal(el: HTMLElement, conn: DbConnection, code: string): 
 
   const players = new Map([...conn.db.player.iter()].filter((p) => p.roomCode === code).map((p) => [p.identity.toHexString(), p]));
   const doodles = new Map([...conn.db.doodle.iter()].filter((d) => d.roomCode === code).map((d) => [d.player.toHexString(), d.png]));
-  // Same order on every client: by color slot.
+  // Same order on every client: by color slot. Decode the cut-outs now; stages are made per slot.
   const entries = [...conn.db.weapon.iter()]
     .filter((w) => w.roomCode === code && players.has(w.player.toHexString()))
     .map((w) => {
       const p = players.get(w.player.toHexString())!;
       const stored = w.spec ? (JSON.parse(w.spec) as StoredWeapon) : null;
-      return { p, stored, art: weaponArt({ spriteUrl: w.spriteUrl, png: doodles.get(w.player.toHexString()) }, stored?.spec ?? null) };
+      return { p, stored, doodle: loadDoodle({ spriteUrl: w.spriteUrl, png: doodles.get(w.player.toHexString()) }).catch(() => null) };
     })
     .sort((a, b) => a.p.colorSlot - b.p.colorSlot);
 
   const n = entries.length;
   const total = revealSeconds(n);
+  const per = (total - REVEAL.introS - REVEAL.countdownS) / Math.max(1, n);
   let shown = '';
+  let stage: WeaponStage | null = null;
+  const timers: number[] = [];
+  const clearStage = () => { stage?.destroy(); stage = null; timers.splice(0).forEach(clearTimeout); };
+
   let raf = 0;
   const frame = () => {
     const r = conn.db.room.code.find(code);
@@ -37,6 +43,7 @@ export function mountReveal(el: HTMLElement, conn: DbConnection, code: string): 
       const key = slot.kind === 'weapon' ? `w${slot.index}` : slot.kind === 'countdown' ? `c${slot.number}` : 'intro';
       if (key !== shown) {
         shown = key;
+        clearStage();
         box.innerHTML = '';
         if (slot.kind === 'intro') box.innerHTML = '<div class="reveal-title">Behold…</div>';
         else if (slot.kind === 'countdown') box.innerHTML = `<div class="countdown-big">${slot.number}</div>`;
@@ -53,19 +60,22 @@ export function mountReveal(el: HTMLElement, conn: DbConnection, code: string): 
     const card = document.createElement('div');
     card.className = 'reveal-card';
     card.innerHTML = `<div class="who" style="color:${c.hex}">${esc(e.p.name)}</div>`;
-    const art = await e.art;
-    if (shown !== key) return; // moved on while the art loaded
-    card.appendChild(art);
+    const s = await weaponStage(await e.doodle, e.stored?.spec ?? null, { size: Math.min(innerHeight * 0.46, 420), upgradeLater: true });
+    if (shown !== key) { s.destroy(); return; } // moved on while it loaded
+    stage = s;
+    card.appendChild(s.el);
     const name = document.createElement('div');
     name.className = 'what';
     name.textContent = e.stored?.spec.name ?? '???';
     card.appendChild(name);
     box.appendChild(card);
-    playTestSwing(art, e.stored?.spec.archetype ?? 'swing');
+    // the moment: plain doodle → flash + upgrades → test swing, scaled to the slot length
+    timers.push(window.setTimeout(() => void s.upgrade(), per * 220));
+    timers.push(window.setTimeout(() => s.swing(), per * 560));
   };
 
   frame();
-  return () => { cancelAnimationFrame(raf); box.remove(); };
+  return () => { cancelAnimationFrame(raf); clearStage(); box.remove(); };
 }
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[ch]!);

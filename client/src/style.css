@@ -18,35 +18,18 @@ input { font: inherit; padding: 12px 14px; border-radius: 12px; border: 2px soli
 .edge-flash { position: fixed; inset: 0; pointer-events: none; box-shadow: inset 0 0 0 0 var(--player); transition: box-shadow 80ms; }
 .edge-flash.on { box-shadow: inset 0 0 0 12px var(--player); }
 
-/* ── Reveal: per-weapon test swings (one class per archetype) ── */
+/* ── Reveal cards (the weapon itself renders on a small Pixi stage: ui/weapon-stage.ts) ── */
 .reveal-title { font-size: clamp(40px, 7vw, 96px); font-weight: 900; letter-spacing: 2px; text-shadow: 0 6px 30px #0008; }
 .reveal-card { display: grid; justify-items: center; gap: 10px; animation: card-in 260ms cubic-bezier(.2, 1.4, .4, 1); }
 .reveal-card .who { font-size: clamp(22px, 3vw, 40px); font-weight: 900; }
 .reveal-card .what { font-size: clamp(26px, 4vw, 56px); font-weight: 900; color: var(--fg); text-shadow: 0 4px 20px #000a; }
 .weapon-stage { position: relative; width: min(46vmin, 420px); aspect-ratio: 1; }
-.weapon-stage > div, .weapon-stage canvas, .weapon-stage img { position: absolute; inset: 0; width: 100%; height: 100%; }
-.weapon-stage canvas, .weapon-stage img { filter: drop-shadow(0 0 3px #000) drop-shadow(0 0 14px #fff6); }
+.weapon-stage canvas { display: block; }
 .countdown-big { font-size: clamp(120px, 26vw, 360px); font-weight: 900; line-height: 1; animation: pop 420ms cubic-bezier(.2, 1.6, .4, 1); text-shadow: 0 10px 40px #000a; }
 .fight { font-size: clamp(90px, 18vw, 260px); font-weight: 900; color: #ffd60a; animation: fight 900ms ease-out forwards; text-shadow: 0 10px 40px #000c; }
 @keyframes card-in { from { opacity: 0; transform: translateY(30px) scale(.85); } }
 @keyframes pop { from { transform: scale(2.2); opacity: 0; } }
 @keyframes fight { 0% { transform: scale(2.4); opacity: 0; } 25% { transform: scale(1); opacity: 1; } 75% { opacity: 1; } 100% { transform: scale(1.15); opacity: 0; } }
-.anim-swing  { animation: a-swing 900ms 250ms cubic-bezier(.5, 0, .3, 1.4) both; }
-.anim-thrust { animation: a-thrust 800ms 250ms cubic-bezier(.6, 0, .2, 1.3) both; }
-.anim-slam   { animation: a-slam 950ms 250ms cubic-bezier(.7, 0, .3, 1) both; }
-.anim-shoot  { animation: a-shoot 300ms 250ms ease-out 3 both; }
-.anim-throw  { animation: a-throw 1000ms 250ms ease-in-out both; }
-.anim-whip   { animation: a-whip 900ms 250ms ease-in-out both; }
-.anim-spin   { animation: a-spin 900ms 250ms cubic-bezier(.4, 0, .2, 1) both; }
-.anim-beam   { animation: a-beam 1000ms 250ms ease-in-out both; }
-@keyframes a-swing  { 0% { transform: rotate(0) } 30% { transform: rotate(-55deg) } 65% { transform: rotate(75deg) } 100% { transform: rotate(0) } }
-@keyframes a-thrust { 0% { transform: none } 35% { transform: translateX(-12%) } 60% { transform: translateX(22%) scaleX(1.1) } 100% { transform: none } }
-@keyframes a-slam   { 0% { transform: rotate(0) } 40% { transform: rotate(-70deg) } 60% { transform: rotate(25deg) } 70% { transform: rotate(18deg) translateY(4%) } 100% { transform: rotate(0) } }
-@keyframes a-shoot  { 0% { transform: none } 30% { transform: translateX(-8%) rotate(-6deg) } 100% { transform: none } }
-@keyframes a-throw  { 0% { transform: none } 50% { transform: translate(40%, -25%) rotate(540deg) scale(.8) } 100% { transform: rotate(720deg) } }
-@keyframes a-whip   { 0%, 100% { transform: none } 25% { transform: skewY(-18deg) rotate(-20deg) } 55% { transform: skewY(22deg) rotate(30deg) } 75% { transform: skewY(-8deg) } }
-@keyframes a-spin   { from { transform: rotate(0) } to { transform: rotate(720deg) } }
-@keyframes a-beam   { 0%, 100% { filter: none; transform: none } 40% { transform: translateX(-2%) } 45% { transform: translateX(2%) } 60% { filter: drop-shadow(0 0 30px #fff) brightness(1.6); transform: scale(1.05) } }
 
 /* Controllers: no double-tap zoom, no tap highlight, no callouts on long-press. `manipulation`
    keeps taps instant; the stick and attack button opt out of all browser gestures. */

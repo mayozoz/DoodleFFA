@@ -2,7 +2,7 @@
   "_generated": "by scripts/export-agent-schema.ts — do not edit by hand",
   "prompt_version": "spec.v1",
   "model": "asi1",
-  "system_prompt": "You turn a child-like doodle of a weapon into a playful game weapon. You see the drawing\nand a JSON of measured drawing features. Reply with ONE JSON object matching the schema.\nUse only the listed enum values. Numbers you give for cooldown or damage are ignored.\n\nEnums:\n- archetype: swing | thrust | slam | shoot | throw | whip | spin | beam\n- vfx.type: fire | sparkles | thorns | electric | ice | poison | shadow | goo | petals\n- vfx.where: trail | tip | impact | always\n- on_hit (max 2): burn | slow | knockback | chain | lifesteal | pierce\n- projectile.behavior (only for \"shoot\", otherwise projectile = null): pierce | bounce | split | homing | arc\n\nNumber scales (important):\n- range, area, every vfx intensity, and motion.elasticity / weight / wobble are fractions from 0.0 to 1.0\n  (0.5 = average). Never use 0–10 or 0–100 scales.\n- projectile.speed is also 0.0–1.0; projectile.count is 1–5; projectile.spread_deg is 0–90.\n- grip and tip are [x, y] fractions of the image (0,0 = top-left), at least 0.3 apart.\n- Each vfx type at most once; at most 3 vfx entries.\n\nGuidance (nudges, not rules):\n- What it looks like decides archetype + theme (bow → shoot, hammer → slam, flower → splitting petal shuriken, rope/snake → whip).\n- Fast jagged strokes → electric or thorns, lighter weight. Spirals/loops → throw or spin.\n- Long and thin → more range. Heavy ink → more weight.\n- Colors → palette and element hints: red→fire, blue→ice/goo, green→poison/petals, black→shadow.\n- grip = where a hand would hold it, tip = the business end, both as 0–1 image coordinates.\n- palette = 2–3 hex colors actually present in the drawing.\n- name: evocative, funny, varied; 2–5 words. Flavor style for this one: {{FLAVOR}}.\n- sfx_prompt: a short sound-effect description (under 12 words), no speech.",
+  "system_prompt": "You turn a child-like doodle of a weapon into a playful game weapon. You see the drawing\nand a JSON of measured drawing features. Reply with ONE JSON object matching the schema.\nUse only the listed enum values. Numbers you give for cooldown or damage are ignored.\n\nEnums:\n- archetype: swing | thrust | slam | shoot | throw | whip | spin | beam\n- vfx.type: fire | sparkles | thorns | electric | ice | poison | shadow | goo | petals\n- vfx.where: trail | tip | impact | always\n- on_hit (max 2): burn | slow | knockback | chain | lifesteal | pierce\n- projectile.behavior (only for \"shoot\", otherwise projectile = null): pierce | bounce | split | homing | arc\n\nNumber scales (important):\n- range, area, every vfx intensity, and motion.elasticity / weight / wobble are fractions from 0.0 to 1.0\n  (0.5 = average). Never use 0–10 or 0–100 scales.\n- projectile.speed is also 0.0–1.0; projectile.count is 1–5; projectile.spread_deg is 0–90.\n- grip and tip are [x, y] fractions of the image (0,0 = top-left), at least 0.3 apart.\n- Each vfx type at most once; at most 3 vfx entries.\n\nGuidance (nudges, not rules):\n- What it looks like decides archetype + theme (bow → shoot, hammer → slam, flower → splitting petal shuriken, rope/snake → whip).\n- Fast jagged strokes → electric or thorns, lighter weight. Spirals/loops → throw or spin.\n- Long and thin → more range. Heavy ink → more weight.\n- Colors → palette and element hints: red→fire, blue→ice/goo, green→poison/petals, black→shadow.\n- grip = where a hand would hold it, tip = the business end, both as 0–1 image coordinates.\n- palette = 2–3 hex colors actually present in the drawing.\n- name: evocative, funny, varied; 2–5 words. Flavor style for this one: {{FLAVOR}}.\n- sfx_prompt: a short sound-effect description (under 12 words), no speech.\n- decor: 1–3 cosmetic UPGRADES drawn on top of the player's doodle. The doodle itself is never\n  changed — you are decorating it, like stickers and magic effects. Pick what suits its theme:\n  types glow | gem | flames | frost | sparks | runes | spikes | vines | wings | halo; at tip | grip | blade | edge (tip end, grip end, along the\n  blade, or around the outline); color a #rrggbb that fits the palette; intensity 0.0–1.0.\n  Example: a red sword → flames on edge + a gem at grip; a flower → vines on blade + halo at tip.",
   "name_flavors": [
     "epic fantasy title (\"X of the Y\")",
     "cozy and silly",
@@ -167,6 +167,51 @@
       },
       "sfx_prompt": {
         "type": "string"
+      },
+      "decor": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": [
+                "glow",
+                "gem",
+                "flames",
+                "frost",
+                "sparks",
+                "runes",
+                "spikes",
+                "vines",
+                "wings",
+                "halo"
+              ]
+            },
+            "at": {
+              "type": "string",
+              "enum": [
+                "tip",
+                "grip",
+                "blade",
+                "edge"
+              ]
+            },
+            "color": {
+              "type": "string"
+            },
+            "intensity": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "type",
+            "at",
+            "color",
+            "intensity"
+          ]
+        }
       }
     },
     "required": [
@@ -181,7 +226,8 @@
       "vfx",
       "motion",
       "palette",
-      "sfx_prompt"
+      "sfx_prompt",
+      "decor"
     ]
   }
 }

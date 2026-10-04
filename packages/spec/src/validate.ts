@@ -1,7 +1,7 @@
 import {
-  ARCHETYPES, ON_HIT, PROJECTILE_BEHAVIORS, VFX_TYPES, VFX_WHERE, isOneOf,
+  ARCHETYPES, DECOR_AT, DECOR_DEFAULT_AT, DECOR_TYPES, ON_HIT, PROJECTILE_BEHAVIORS, VFX_TYPES, VFX_WHERE, isOneOf,
 } from './enums';
-import type { MotionSpec, ProjectileSpec, Vec2, VfxSpec, WeaponSpec } from './types';
+import type { DecorSpec, MotionSpec, ProjectileSpec, Vec2, VfxSpec, WeaponSpec } from './types';
 
 // Hand-rolled on purpose: it must run inside the SpacetimeDB module runtime as well as the
 // browser, with zero dependencies. Never throws — every bad field falls back individually.
@@ -17,6 +17,7 @@ export const LIMITS = {
   sfxPromptMaxLen: 160,
   maxOnHit: 2,
   maxVfx: 3,
+  maxDecor: 3,
   maxPalette: 4,
   cooldown: [0.25, 1.5] as const,
   projectileCount: [1, 5] as const,
@@ -101,6 +102,26 @@ function vfxList(v: unknown, fb: VfxSpec[], issues: string[]): VfxSpec[] {
   return out;
 }
 
+function decorList(v: unknown, fb: DecorSpec[], palette: string[], issues: string[]): DecorSpec[] {
+  if (v === undefined) return fb;           // older specs / fixtures: use the fallback quietly
+  if (!Array.isArray(v)) { issues.push('decor: not a list, using fallback'); return fb; }
+  const out: DecorSpec[] = [];
+  for (const [i, raw] of v.entries()) {
+    if (!raw || typeof raw !== 'object') continue;
+    const e = raw as Record<string, unknown>;
+    if (!isOneOf(DECOR_TYPES, e.type)) { issues.push(`decor[${i}].type: unknown "${String(e.type)}", dropped`); continue; }
+    if (out.some((o) => o.type === e.type)) { issues.push(`decor[${i}].type: duplicate "${e.type}", dropped`); continue; }
+    out.push({
+      type: e.type,
+      at: isOneOf(DECOR_AT, e.at) ? e.at : DECOR_DEFAULT_AT[e.type],
+      color: typeof e.color === 'string' && HEX.test(e.color) ? e.color : palette[out.length % Math.max(1, palette.length)] ?? '#ffffff',
+      intensity: num(e.intensity, 0.6, 0, 1, `decor[${i}].intensity`, issues),
+    });
+    if (out.length >= LIMITS.maxDecor) break;
+  }
+  return out;
+}
+
 function motion(v: unknown, fb: MotionSpec, issues: string[]): MotionSpec {
   const m = (v && typeof v === 'object' ? v : {}) as Record<string, unknown>;
   return {
@@ -157,7 +178,9 @@ export function validateWeaponSpec(input: unknown, fallback: WeaponSpec): Valida
     motion: motion(r.motion, fallback.motion, issues),
     palette: palette.length > 0 ? palette : fallback.palette,
     sfx_prompt: str(r.sfx_prompt, fallback.sfx_prompt, LIMITS.sfxPromptMaxLen, 'sfx_prompt', issues),
+    decor: [],
   };
+  spec.decor = decorList(r.decor, fallback.decor, spec.palette, issues);
 
   // grip and tip must not coincide, otherwise orientation is undefined.
   if (Math.hypot(spec.tip[0] - spec.grip[0], spec.tip[1] - spec.grip[1]) < 0.1) {

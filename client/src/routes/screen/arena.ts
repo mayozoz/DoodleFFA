@@ -2,7 +2,8 @@ import { Timestamp } from 'spacetimedb';
 import { Application, ColorMatrixFilter, Container, Graphics, Sprite, Texture, type Filter } from 'pixi.js';
 import {
   ARCHETYPE_MODULES, Character, Character3D, Feedback, Interpolator, STAGE, Stage3D, StageGrid, Tweener,
-  createWeaponSprite, drawMarker, ease, loadCharacterAsset, loadCutout, motionFeel, type CharacterAsset,
+  WeaponDecor, createWeaponSprite, drawMarker, ease, edgePoints, loadCharacterAsset, loadCutout, motionFeel,
+  type CharacterAsset, type EdgePoints,
 } from '@doodle/engine';
 import {
   ABILITY_TUNING, DEFAULT_SWING, MAX_HP, arenaExtents, colorForSlot, isAbilityId,
@@ -35,6 +36,8 @@ interface FighterView {
   /** px-per-unit the weapon sprite was built at; the hand rescales by unit / weaponUnit so the
    *  weapon keeps its world size as the arena (and the zoom) grows with the player count */
   weaponUnit: number;
+  /** the AI's upgrades drawn on top of the doodle (never edits it) */
+  decor: WeaponDecor | null;
   effects: FighterEffects;
   grayscale: ColorMatrixFilter;
 }
@@ -82,6 +85,8 @@ export class Arena {
   private feedback: Feedback;
   private fighters = new Map<string, FighterView>();
   private textures = new Map<string, Texture>();
+  /** doodle outline points per texture (decorations hang off the real silhouette) */
+  private edges = new WeakMap<Texture, EdgePoints>();
   private code = '';
   private phase: Phase = 'lobby';
   private unit = 40; // px per world unit, recomputed from arena radius
@@ -211,7 +216,7 @@ export class Arena {
       body3d = new Character3D(this.asset, tint);
       this.stage3d.scene.add(body3d.root);
     }
-    const v: FighterView = { char, body3d, last: null, weapon: null, interp: new Interpolator(), lastAttack: 0n, stored: PLACEHOLDER, dead: false, weaponUnit: this.unit, effects: {}, grayscale: new ColorMatrixFilter() };
+    const v: FighterView = { char, body3d, last: null, weapon: null, interp: new Interpolator(), lastAttack: 0n, stored: PLACEHOLDER, dead: false, weaponUnit: this.unit, decor: null, effects: {}, grayscale: new ColorMatrixFilter() };
     v.grayscale.desaturate();
     this.fighters.set(hex, v);
     const row = [...this.conn.db.fighter.iter()].find((f) => f.player.toHexString() === hex);
@@ -235,10 +240,12 @@ export class Arena {
     if (!tex) return;
 
     v.weapon?.destroy();
+    v.decor?.destroy();
     v.weapon = createWeaponSprite(tex, v.stored, this.unit, raw);
     v.weaponUnit = this.unit;
     baseFilters.set(v.weapon, v.weapon.filters ? [...v.weapon.filters] : []);
-    v.char.hand.addChild(v.weapon);
+    v.decor = new WeaponDecor(tex, this.edges.get(tex) ?? [], v.stored.spec, v.weapon.scale.x);
+    v.char.hand.addChild(v.decor.back, v.weapon, v.decor.front); // upgrades behind + in front
   }
 
   /** Generated sprite from S3. Cut out the white too: server-side background removal isn't built. */
@@ -256,7 +263,9 @@ export class Arena {
     const cached = this.textures.get(key);
     if (cached) return cached;
     try {
-      const tex = Texture.from(await loadCutout(src));
+      const canvas = await loadCutout(src);
+      const tex = Texture.from(canvas);
+      this.edges.set(tex, edgePoints(canvas));
       this.textures.set(key, tex);
       return tex;
     } catch { return null; }
@@ -376,6 +385,7 @@ export class Arena {
     const v = this.fighters.get(hex);
     v?.char.view.destroy({ children: true });
     v?.body3d?.dispose();
+    v?.decor?.destroy();
     this.fighters.delete(hex);
   }
 
@@ -460,6 +470,8 @@ export class Arena {
         v.char.layout3D({ x: hp.x - feet.x, y: hp.y - feet.y }, { x: head.x - feet.x, y: head.y - feet.y });
       }
       v.char.animate(simDt, speed, v.stored.spec.motion.wobble);
+      // upgrades follow the weapon sprite (after attack animations moved it this frame)
+      if (v.decor && v.weapon) { v.decor.sync(v.weapon); v.decor.update(simDt); }
       v.char.view.zIndex = feet.y;
     }
     this.actors.sortableChildren = true;

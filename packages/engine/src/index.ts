@@ -9,3 +9,4 @@ export * from './vfx';
 export * from './stage';
 export * from './cutout';
 export * from './three';
+export * from './decor';

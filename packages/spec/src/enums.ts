@@ -16,6 +16,23 @@ export type OnHit = (typeof ON_HIT)[number];
 export const PROJECTILE_BEHAVIORS = ['pierce', 'bounce', 'split', 'homing', 'arc'] as const;
 export type ProjectileBehavior = (typeof PROJECTILE_BEHAVIORS)[number];
 
+/**
+ * Cosmetic upgrades drawn ON TOP of the player's doodle (never replacing or editing it).
+ * The AI picks up to 3; the engine renders each one procedurally from the doodle's own outline.
+ */
+export const DECOR_TYPES = ['glow', 'gem', 'flames', 'frost', 'sparks', 'runes', 'spikes', 'vines', 'wings', 'halo'] as const;
+export type DecorType = (typeof DECOR_TYPES)[number];
+
+/** Where a decoration sits: the tip end, the grip end, along the grip→tip line, or around the outline. */
+export const DECOR_AT = ['tip', 'grip', 'blade', 'edge'] as const;
+export type DecorAt = (typeof DECOR_AT)[number];
+
+/** Sensible spot for each decoration when the AI's choice is missing/invalid. */
+export const DECOR_DEFAULT_AT: Record<DecorType, DecorAt> = {
+  glow: 'edge', gem: 'grip', flames: 'edge', frost: 'edge', sparks: 'tip',
+  runes: 'blade', spikes: 'edge', vines: 'blade', wings: 'grip', halo: 'tip',
+};
+
 export const MARKERS = [
   'circle', 'triangle', 'square', 'diamond', 'star', 'hexagon',
   'pentagon', 'cross', 'heart', 'moon', 'bolt', 'ring',

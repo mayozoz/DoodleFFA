@@ -1,4 +1,4 @@
-import type { Archetype, Marker, OnHit, ProjectileBehavior, VfxType, VfxWhere } from './enums';
+import type { Archetype, DecorAt, DecorType, Marker, OnHit, ProjectileBehavior, VfxType, VfxWhere } from './enums';
 
 export type Vec2 = [number, number];
 
@@ -6,6 +6,16 @@ export interface VfxSpec {
   type: VfxType;
   where: VfxWhere;
   /** 0–1 */
+  intensity: number;
+}
+
+/** A cosmetic upgrade layered on the doodle (see DECOR_TYPES). Never changes stats. */
+export interface DecorSpec {
+  type: DecorType;
+  at: DecorAt;
+  /** #rrggbb */
+  color: string;
+  /** 0–1: how big / dense / bright */
   intensity: number;
 }
 
@@ -46,6 +56,8 @@ export interface WeaponSpec {
   motion: MotionSpec;
   palette: string[];
   sfx_prompt: string;
+  /** up to 3 cosmetic upgrades drawn on top of the doodle (the "upgrade" in the Reveal) */
+  decor: DecorSpec[];
 }
 
 /** Numbers the engine/tick actually use. Produced by `balance()` on the server. */

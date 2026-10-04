@@ -1,6 +1,7 @@
 import type { DrawingFeatures } from './features';
-import type { Archetype, VfxType } from './enums';
-import type { VfxSpec, WeaponSpec } from './types';
+import type { Archetype, DecorType, VfxType } from './enums';
+import { DECOR_DEFAULT_AT } from './enums';
+import type { DecorSpec, VfxSpec, WeaponSpec } from './types';
 import { mulberry32 } from './rng';
 
 // Deterministic, offline weapon generation. Used when the AI spec is missing/late,
@@ -21,6 +22,7 @@ export const MYSTERY_STICK: WeaponSpec = {
   motion: { elasticity: 0.5, weight: 0.5, wobble: 0.3 },
   palette: ['#8B5A2B', '#D2A26B'],
   sfx_prompt: 'wooden stick whoosh',
+  decor: [{ type: 'glow', at: 'edge', color: '#ffd27a', intensity: 0.5 }, { type: 'gem', at: 'grip', color: '#3fd0c9', intensity: 0.6 }],
 };
 
 /** M1 hard-coded spec: every weapon is this swing until the AI layer lands. */
@@ -41,6 +43,22 @@ const NAME_PARTS = {
   adj: ['Wobbly', 'Grim', 'Sparkling', 'Furious', 'Sleepy', 'Ancient', 'Spicy', 'Humble', 'Jagged', 'Lucky'],
   noun: { swing: 'Blade', thrust: 'Spear', slam: 'Mallet', shoot: 'Blaster', throw: 'Boomerang', whip: 'Lash', spin: 'Whirl', beam: 'Ray' } as Record<Archetype, string>,
 };
+
+/** Ink-color → upgrade, so every weapon gets a Reveal "upgrade" even without AI. */
+const DECOR_BY_ELEMENT: Partial<Record<VfxType, DecorType>> = { fire: 'flames', ice: 'frost', poison: 'vines', shadow: 'spikes', electric: 'sparks' };
+
+function fallbackDecor(vfx: VfxSpec[], palette: string[], rand: () => number): DecorSpec[] {
+  const out: DecorSpec[] = [{ type: 'glow', at: 'edge', color: palette[0] ?? '#ffffff', intensity: 0.55 }];
+  for (const v of vfx) {
+    const t = DECOR_BY_ELEMENT[v.type];
+    if (t && !out.some((d) => d.type === t)) out.push({ type: t, at: DECOR_DEFAULT_AT[t], color: palette[out.length % Math.max(1, palette.length)] ?? '#ffffff', intensity: 0.6 });
+  }
+  if (out.length < 3) {
+    const extra: DecorType = (['gem', 'halo', 'runes', 'wings'] as const)[Math.floor(rand() * 4)]!;
+    if (!out.some((d) => d.type === extra)) out.push({ type: extra, at: DECOR_DEFAULT_AT[extra], color: palette[1] ?? palette[0] ?? '#ffd60a', intensity: 0.6 });
+  }
+  return out.slice(0, 3);
+}
 
 export function fallbackSpecFromFeatures(f: DrawingFeatures, seed: number): WeaponSpec {
   if (f.isEmpty) return MYSTERY_STICK;
@@ -79,5 +97,6 @@ export function fallbackSpecFromFeatures(f: DrawingFeatures, seed: number): Weap
     motion: { elasticity: 1 - f.symmetry, weight, wobble: f.jaggedness },
     palette: dominant.slice(0, 3).map(([hex]) => hex),
     sfx_prompt: `${archetype} weapon whoosh`,
+    decor: fallbackDecor(vfx, dominant.slice(0, 3).map(([hex]) => hex), rand),
   };
 }

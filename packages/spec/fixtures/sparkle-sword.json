@@ -30,5 +30,25 @@
     "#2f9bff",
     "#f5f5f5"
   ],
-  "sfx_prompt": "bright metallic swish with chimes"
+  "sfx_prompt": "bright metallic swish with chimes",
+  "decor": [
+    {
+      "type": "glow",
+      "at": "edge",
+      "color": "#2f9bff",
+      "intensity": 0.6
+    },
+    {
+      "type": "wings",
+      "at": "grip",
+      "color": "#f5f5f5",
+      "intensity": 0.5
+    },
+    {
+      "type": "frost",
+      "at": "edge",
+      "color": "#bfe9ff",
+      "intensity": 0.6
+    }
+  ]
 }
