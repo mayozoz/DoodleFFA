@@ -5,8 +5,8 @@ export function joinView(ctx: PlayCtx, onJoined: (code: string) => void): () => 
   const params = new URLSearchParams(location.search);
   ctx.el.innerHTML = `
     <form class="center" id="join">
-      <h1>Doodle Arena</h1>
-      <input id="code" placeholder="ROOM" maxlength="4" autocapitalize="characters" value="${params.get('room') ?? ''}" />
+      <h1>Doodle FFA</h1>
+      <input id="code" placeholder="ROOM" maxlength="4" autocapitalize="characters" />
       <input id="name" placeholder="Your name" maxlength="16" />
       <button type="submit">Join</button>
       <p id="err" style="color:#ff6b6b"></p>
@@ -23,6 +23,7 @@ export function joinView(ctx: PlayCtx, onJoined: (code: string) => void): () => 
       form.querySelector('#err')!.textContent = err instanceof Error ? err.message : 'Could not join';
     }
   };
+  form.querySelector<HTMLInputElement>('#code')!.value = params.get('room') ?? '';
   form.addEventListener('submit', onSubmit);
   return () => form.removeEventListener('submit', onSubmit);
 }

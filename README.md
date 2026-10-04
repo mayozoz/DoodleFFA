@@ -1,4 +1,4 @@
-# Doodle Arena
+# Doodle FFA
 
 A party battle royale for 4–12 people in the same room. Everyone draws a weapon on their phone in 20 s, picks a drop spot, and then fights for 60 s on one shared screen. Between drawing and fighting, a step that players never see turns each doodle into a weapon spec made of fixed building blocks. A balance formula then makes every weapon equally strong.
 
@@ -10,8 +10,8 @@ The planning brief is the source of truth for design. This README covers how the
 
 ```
 .
-├── client/                    Vite + TS app — one bundle, three routes
-│   ├── src/main.ts            path router: /play, /screen, /dev/weapons
+├── client/                    Vite + TS app — modes, solo, party and controller routes
+│   ├── src/main.ts            path router: /, /solo, /play, /screen, /dev/weapons
 │   ├── src/net/               SpacetimeDB connection + server-clock helpers
 │   ├── src/routes/play/       controller: join → draw → drop → battle → results
 │   ├── src/routes/screen/     shared display: lobby/QR, PixiJS arena, results
@@ -69,13 +69,16 @@ pnpm dev                          # vite --host on :5173
 ```
 
 Open:
+- **Title screen:** `http://localhost:5173/`. Click Start game (or press Enter), then choose Single player or Multiplayer. The armed ghost cast matches the ability artwork.
+- **Single player:** `/solo` opens a shared-screen room with three bots and a QR code. Scan it (or open the room link) on your phone, enter your name, then click Start solo match on the host. Draw and use the joystick and attack buttons on your phone.
+- **Multiplayer:** `/screen` hosts a party with a QR code, clickable join link, copy-link button, and room code. Start becomes available when at least two players join.
 - **Shared screen:** `http://localhost:5173/screen`. It creates a room and shows a QR code.
 - **Controllers:** scan the QR, or open `http://<LAN-IP>:5173/play?room=ABCD`.
 - **Playground:** `http://localhost:5173/dev/weapons`.
 
-You can play in desktop browser tabs while developing. `/screen` and `/play` keep separate identity tokens, so one laptop can act as the screen and a controller at once. Use a private window for each extra controller.
+You can play in desktop browser tabs while developing. `/screen` and `/play` keep separate identity tokens, so one laptop can act as the screen and a controller at once. Solo uses separate host and bot tokens. Humans join either mode through the same phone controller. Bots send normal inputs from the solo page; the server still simulates every battle. Keep the solo page open during the match. Use a private window for each extra multiplayer controller.
 
-> Phones on the LAN need `ws://<LAN-IP>:3000` to reach SpacetimeDB, so set `VITE_STDB_URI` to that in `.env`. iOS Safari blocks `ws://` from an `https://` page, so in dev serve both over plain http, or both over https/wss.
+> In local development, Vite forwards database WebSockets through port 5173 to local port 3000, so phones use the game’s current address. When the host opens localhost, the QR/link discovers its current LAN address automatically. Both devices must use the same Wi-Fi. Production builds use `VITE_STDB_URI` and `VITE_PUBLIC_URL`; configure those for the deployed server.
 
 ### After changing the server
 
@@ -508,3 +511,17 @@ arrives after they mount. Requests time out after 30 seconds; missing keys,
 provider failures, and invalid/oversized output leave the original doodle visible.
 Responses after Reveal or from a different round/drawing are discarded.
 Use `?debug` to see `gen_sprite` progress or failures.
+
+### Title-screen soundtrack
+
+The title and game-mode menu use the static 24-second instrumental loop in
+`client/public/music/doodle-ffa-menu.mp3`, generated with ElevenLabs Sound Effects
+v2 (`loop: true`). Playback starts on Start game or the music toggle, at low volume;
+the mute preference is saved, and music pauses when the tab is hidden or left.
+The current API key lacks `music_generation` permission, so the dedicated Music API
+is not used for this asset. No API key is bundled in the client.
+
+To regenerate with the same available endpoint:
+`corepack pnpm tsx scripts/generate-menu-music.ts --sound-loop --replace`.
+With Music API permission enabled, omit `--sound-loop` for a full composed track.
+Generation metadata and the prompt are stored beside the MP3.

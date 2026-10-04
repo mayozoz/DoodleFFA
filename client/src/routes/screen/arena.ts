@@ -109,11 +109,18 @@ export class Arena {
 
   static async create(host: HTMLElement, conn: DbConnection): Promise<Arena> {
     // A missing/broken model must never stall the round: fall back to the 2D rig.
-    const asset = await loadCharacterAsset().catch((e: unknown) => {
+    let asset = await loadCharacterAsset().catch((e: unknown) => {
       console.warn('[arena] 3D character unavailable, using 2D rig', e);
       return null;
     });
-    const stage3d = asset ? new Stage3D() : null;
+    let stage3d: Stage3D | null = null;
+    if (asset) {
+      try { stage3d = new Stage3D(); }
+      catch (error) {
+        console.warn('[arena] 3D graphics unavailable, using the 2D arena', error);
+        asset = null;
+      }
+    }
     if (stage3d) host.appendChild(stage3d.canvas);
     const app = new Application();
     await app.init({ resizeTo: window, background: STAGE.background, backgroundAlpha: stage3d ? 0 : 1, antialias: true });

@@ -59,3 +59,24 @@ it('does not retry unrelated connection failures', async () => {
   await rejection;
   expect(mocks.attempts).toHaveLength(1);
 });
+
+it('isolates solo host, controller and bots from multiplayer identities', async () => {
+  const roles = ['screen', 'play', 'solo-screen', 'solo-play', 'solo-bot-0', 'solo-bot-1', 'solo-bot-2'] as const;
+  for (const [index, role] of roles.entries()) {
+    const pending = connect(role);
+    expect(mocks.attempts[index].token).toBeUndefined();
+    mocks.attempts[index].connected({}, {}, `token-${role}`);
+    await pending;
+  }
+  expect(new Set(data.values()).size).toBe(roles.length);
+});
+
+it('rejects a stalled connection so the page can show a retry state', async () => {
+  vi.useFakeTimers();
+  try {
+    const pending = connect('screen');
+    const rejection = expect(pending).rejects.toThrow('Could not reach the game server');
+    await vi.advanceTimersByTimeAsync(10000);
+    await rejection;
+  } finally { vi.useRealTimers(); }
+});

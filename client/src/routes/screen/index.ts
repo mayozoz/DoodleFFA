@@ -3,12 +3,13 @@ import { connect } from '../../net/connection';
 import { syncFromPhaseStart } from '../../net/clock';
 import { mountCountdown } from '../../ui/countdown';
 import { Arena } from './arena';
-import { lobbyOverlay } from './lobby';
+import { lobbyOverlay, type SoloLobbyState } from './lobby';
 import { resultsOverlay } from './results';
 import { mountScreenDebug } from './debug-status';
 import { mountScoreboard } from './scoreboard';
 import { mountReveal } from './reveal';
 import { mountCommentator } from './commentator';
+import { mountSoloBots } from '../solo/bots';
 
 // Shared screen (/screen). Creates a room, subscribes to everything public for it, and
 // renders. It never simulates — positions come from `fighter` rows, ~100 ms behind.
@@ -18,11 +19,14 @@ const LABEL: Partial<Record<Phase, string>> = {
   drop: 'Spin for your special · learn your weapon · deploy!',
 };
 
-export async function mount(el: HTMLElement) {
-  const { conn, identity } = await connect('screen');
-  el.innerHTML = `<div id="stage" style="position:fixed;inset:0"></div><div id="overlay" style="position:fixed;inset:0;pointer-events:none"></div>`;
+export async function mount(el: HTMLElement, solo = new URLSearchParams(location.search).has('solo')) {
+  el.innerHTML = '<div class="center" role="status"><h1>Creating your party room…</h1><p>Your phone join code will appear here.</p></div>';
+  const { conn, identity } = await connect(solo ? 'solo-screen' : 'screen');
+  el.innerHTML = `<div id="stage" style="position:fixed;inset:0"></div><div id="overlay" style="position:fixed;inset:0;pointer-events:none"><div class="center" role="status"><h1>Preparing your room…</h1></div></div>`;
   const overlay = el.querySelector<HTMLDivElement>('#overlay')!;
-  const arena = await Arena.create(el.querySelector<HTMLDivElement>('#stage')!, conn);
+  let arena: Arena | null = null;
+  const arenaReady = Arena.create(el.querySelector<HTMLDivElement>('#stage')!, conn);
+  const soloState: SoloLobbyState | null = solo ? { botIds: new Set(), ready: false } : null;
 
   let code = '';
   let phase: Phase | null = null;
@@ -36,9 +40,9 @@ export async function mount(el: HTMLElement) {
     syncFromPhaseStart(r.phaseStartedAt);
     cleanup();
     overlay.innerHTML = '';
-    arena.setPhase(phase);
+    arena?.setPhase(phase);
     commentator?.setPhase(phase);
-    if (phase === 'lobby') cleanup = lobbyOverlay(overlay, conn, code);
+    if (phase === 'lobby') cleanup = lobbyOverlay(overlay, conn, code, soloState, async () => { await arenaReady; await conn.reducers.startRound({}); });
     else if (phase === 'results') {
       const a = resultsOverlay(overlay, conn, code), b = mountScoreboard(overlay, conn, code);
       cleanup = () => { a(); b(); };
@@ -69,10 +73,18 @@ export async function mount(el: HTMLElement) {
   const useRoom = (roomCode: string) => {
     if (code) return;
     code = roomCode;
+    if (soloState) {
+      void mountSoloBots(code, id => { soloState.botIds.add(id); soloState.refresh?.(); }).then(stop => {
+        soloState.ready = true; soloState.refresh?.();
+        window.addEventListener('pagehide', stop, { once: true });
+      }).catch(() => {
+        soloState.error = 'Could not connect your bots. Reload to retry.'; soloState.refresh?.();
+      });
+    }
     mountScreenDebug(conn, code);
     commentator = mountCommentator(conn, code);
-    arena.setRoom(code);
-    conn.subscriptionBuilder().onApplied(render).subscribe([
+    arena?.setRoom(code);
+    conn.subscriptionBuilder().onApplied(render).onError(roomError).subscribe([
       `SELECT * FROM player WHERE room_code = '${code}'`,
       `SELECT * FROM doodle WHERE room_code = '${code}'`,
       `SELECT * FROM weapon WHERE room_code = '${code}'`,
@@ -83,6 +95,20 @@ export async function mount(el: HTMLElement) {
     ]);
     render();
   };
+  void arenaReady.then(created => {
+    arena = created;
+    if (code) arena.setRoom(code);
+    if (phase) arena.setPhase(phase);
+  }).catch(() => {
+    const notice = document.createElement('p');
+    notice.className = 'screen-connection-notice';
+    notice.textContent = 'Arena graphics could not start. Enable graphics acceleration and reload to play.';
+    el.appendChild(notice);
+  });
+  const roomError = () => {
+    cleanup();
+    overlay.innerHTML = '<div class="center" style="pointer-events:auto"><h1>Could not open your room</h1><p>Check the game server, then reload to retry.</p><button onclick="location.reload()">Retry</button><a href="/">Game modes</a></div>';
+  };
   conn.db.room.onInsert((_c, r) => { if (r.host.isEqual(identity)) useRoom(r.code); });
   conn.db.room.onUpdate(() => render());
 
@@ -90,7 +116,8 @@ export async function mount(el: HTMLElement) {
     .onApplied(() => {
       const mine = [...conn.db.room.iter()].find((r) => r.host.isEqual(identity));
       if (mine) useRoom(mine.code);
-      else void conn.reducers.createRoom({});
+      else void conn.reducers.createRoom({}).catch(roomError);
     })
+    .onError(roomError)
     .subscribe(`SELECT * FROM room WHERE host = 0x${identity.toHexString()}`);
 }

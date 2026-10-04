@@ -3,7 +3,8 @@ import type { Identity } from 'spacetimedb';
 import { DbConnection } from '../module_bindings';
 import { DEBUG, debug } from '../debug';
 
-const URI = import.meta.env.VITE_STDB_URI ?? 'ws://localhost:3000';
+const pageOrigin = typeof location === 'undefined' ? 'http://localhost:5173' : location.origin;
+const URI = import.meta.env.DEV ? pageOrigin.replace(/^http/, 'ws') : (import.meta.env.VITE_STDB_URI?.trim() || pageOrigin.replace(/^http/, 'ws'));
 const DB = import.meta.env.VITE_STDB_DB ?? 'doodle-arena';
 
 export interface Connected {
@@ -16,17 +17,27 @@ export interface Connected {
  * during dev without sharing an identity. Tokens persist in localStorage → reconnecting
  * phones keep their player row + color.
  */
-export function connect(role: 'screen' | 'play'): Promise<Connected> {
+export function connect(role: 'screen' | 'play' | 'solo-screen' | 'solo-play' | `solo-bot-${number}`): Promise<Connected> {
   const tokenKey = `doodle.token.${role}:${URI}:${DB}`;
   let saved: string | undefined;
   try { saved = localStorage.getItem(tokenKey) ?? undefined; } catch { /* private mode */ }
 
   return new Promise((resolve, reject) => {
-    const attempt = (token: string | undefined, canRetry: boolean) => DbConnection.builder()
+    const attempt = (token: string | undefined, canRetry: boolean) => {
+      let done = false;
+      let connection: DbConnection | undefined;
+      const timer = setTimeout(() => {
+        if (done) return;
+        done = true; connection?.disconnect();
+        reject(new Error('Could not reach the game server. Check that the server is running, then retry.'));
+      }, 10000);
+      connection = DbConnection.builder()
       .withUri(URI)
       .withDatabaseName(DB)
       .withToken(token)
       .onConnect((conn, identity, token) => {
+        if (done) { conn.disconnect(); return; }
+        done = true; clearTimeout(timer);
         try { localStorage.setItem(tokenKey, token); } catch { /* ignore */ }
         if (DEBUG) {
           const since = Date.now();
@@ -35,6 +46,8 @@ export function connect(role: 'screen' | 'play'): Promise<Connected> {
         resolve({ conn, identity });
       })
       .onConnectError((_ctx, err) => {
+        if (done) return;
+        done = true; clearTimeout(timer);
         // Tokens from local SpacetimeDB cannot authenticate against maincloud.
         if (token && canRetry && /verify token|invalid token|expired token/i.test(String(err))) {
           try { localStorage.removeItem(tokenKey); } catch { /* storage blocked */ }
@@ -49,6 +62,7 @@ export function connect(role: 'screen' | 'play'): Promise<Connected> {
         debug.error('connection', `disconnected${err ? `: ${String(err)}` : ''} — reload to reconnect`);
       })
       .build();
+    };
     attempt(saved, true);
   });
 }

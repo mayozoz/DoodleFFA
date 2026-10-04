@@ -1,0 +1,11 @@
+{
+  "provider": "ElevenLabs",
+  "endpoint": "sound-generation",
+  "text": "Seamless instrumental arcade game menu music loop. Bouncy chiptune synth melody, rubbery funk bass, crisp light electronic drums, plucked mallets, playful bleeps. Cheerful mischievous cartoon ghost brawler energy, bright major key, 120 BPM. Catchy original melody, consistent groove, no intro or outro, no fading, no vocals or speech. Clean polished game soundtrack, leave room for menu clicks.",
+  "duration_seconds": 24,
+  "loop": true,
+  "prompt_influence": 0.55,
+  "model_id": "eleven_text_to_sound_v2",
+  "generatedAt": "2026-10-04T06:06:28.263Z",
+  "songId": null
+}

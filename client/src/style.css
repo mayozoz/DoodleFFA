@@ -124,3 +124,19 @@ input, select { font-size: 16px; } /* iOS zooms into inputs smaller than 16px */
 .tutorial-dots { display: flex; gap: 8px; }
 .tutorial-dots i { width: 8px; height: 8px; border-radius: 50%; background: #ffffff30; transition: background 300ms, transform 300ms; }
 .tutorial-dots i.on { background: var(--t-accent); transform: scale(1.3); }
+
+.lobby-back { color: #bda8ff; margin-bottom: 12px; }
+.lobby-join h1 { margin: 0 0 8px; }
+.lobby-join > p { color: var(--muted); font-size: 13px; }
+.lobby-code { font-size: 54px; margin: 12px 0; letter-spacing: 8px; }
+.party-link { color: #bda8ff; font-size: 13px; overflow-wrap: anywhere; user-select: text; -webkit-user-select: text; -webkit-touch-callout: default; max-width: 100%; }
+.party-copy { margin-top: 14px; padding: 10px 16px; background: #ffffff16; color: var(--fg); font-size: 13px; }
+.lobby-join #start:disabled { opacity: .4; }
+.lobby-join #copy-status { min-height: 18px; margin: 6px 0; }
+
+.lobby-solo { grid-template-columns: 1fr; width: 100%; }
+.lobby-solo #players { margin: 12px 0; }
+
+.room-lobby { height: 100%; overflow-y: auto; pointer-events: auto; align-content: center; }
+.screen-connection-notice { position: fixed; bottom: 10px; left: 50%; transform: translateX(-50%); z-index: 100; max-width: 90vw; padding: 12px 20px; border-radius: 12px; background: #542739; color: #fff; }
+@media (max-height: 700px), (max-width: 900px) { .room-lobby { align-content: start; } }
