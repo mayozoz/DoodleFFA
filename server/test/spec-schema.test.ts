@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { SPEC_GEMINI_SCHEMA, SPEC_JSON_SCHEMA } from '../src/prompts/spec.v1';
+import { DEFAULT_SWING } from '@doodle/spec';
+import { SPEC_JSON_SCHEMA } from '../src/prompts/spec.v1';
 
 type Node = { type?: string | readonly string[]; properties?: Record<string, Node>; required?: readonly string[]; additionalProperties?: boolean; items?: Node };
 
@@ -20,7 +21,8 @@ describe('SPEC_JSON_SCHEMA (strict mode rules)', () => {
     });
   });
 
-  it('has the same top-level fields as the Gemini schema', () => {
-    expect(Object.keys(SPEC_JSON_SCHEMA.properties).sort()).toEqual(Object.keys(SPEC_GEMINI_SCHEMA.properties).sort());
+  it('asks for exactly the WeaponSpec fields (minus cooldown, which the balance formula sets)', () => {
+    const expected = Object.keys(DEFAULT_SWING).filter((k) => k !== 'cooldown').sort();
+    expect(Object.keys(SPEC_JSON_SCHEMA.properties).sort()).toEqual(expected);
   });
 });

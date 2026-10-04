@@ -88,7 +88,6 @@ export const drawView: View = (ctx) => {
       void debug.track('gen_spec', ctx.conn.procedures.genSpec({})).catch(() => {}).then(() => {
         void debug.track('gen_sfx', ctx.conn.procedures.genSfx({})).catch(() => {});
       });
-      void debug.track('gen_sprite', ctx.conn.procedures.genSprite({})).catch(() => {});
     } else if (RUN_SFX_GENERATION) {
       void debug.track('gen_sfx', ctx.conn.procedures.genSfx({})).catch(() => {});
     }

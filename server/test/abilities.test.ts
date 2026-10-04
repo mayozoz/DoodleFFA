@@ -95,7 +95,7 @@ describe('special abilities', () => {
     const bombs = [...s.rows.values()].map(row => ({ ...row, d: JSON.parse(row.data) as AbilityObjectData }));
     expect(bombs.length).toBeGreaterThan(50);
     for (let t = 100; t < 105; t += 0.05) { s.setTime(t); stepAbilityObjects(s.ctx, s.room, s.all, new Map(), 0.05); }
-    expect(s.enemy.hp).toBe(GAME.maxHp * 0.8); expect(s.rows.size).toBe(0);
+    expect(s.enemy.hp).toBe(GAME.maxHp - 200); expect(s.rows.size).toBe(0);
   });
 });
 
@@ -160,5 +160,18 @@ describe('ability integration with the combat tick', () => {
     s.setTime(151); stepBattle(s.ctx, s.room, 0.05);
     expect(s.all.get('a')!.hp).toBe(GAME.maxHp);
     expect(s.all.get('b')!.hp).toBeLessThan(GAME.maxHp);
+  });
+});
+
+import { MAX_ABILITY_COOLDOWN_S } from '@doodle/spec';
+
+describe('ability cooldown scale', () => {
+  it('caps at 22 s, with the nukes the longest', () => {
+    const cds = Object.entries(ABILITIES).map(([id, a]) => [id, a.cooldown] as const);
+    const max = Math.max(...cds.map(([, c]) => c));
+    expect(max).toBe(MAX_ABILITY_COOLDOWN_S);
+    expect(ABILITIES.nuke1.cooldown).toBe(max);
+    expect(ABILITIES.nuke2.cooldown).toBe(max);
+    for (const [id, c] of cds) if (!id.startsWith('nuke')) expect(c).toBeLessThan(max);
   });
 });

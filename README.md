@@ -25,8 +25,8 @@ The planning brief is the source of truth for design. This README covers how the
 │   ├── src/balance.ts         ★ every tuning constant (balance, arena, storm, phase lengths)
 │   ├── src/config.ts          model IDs, endpoints, timeouts, secret key names
 │   ├── src/reducers/          admin, lobby, draw, input, tick
-│   ├── src/procedures/        gen_spec, gen_sprite, gen_sfx (+ shared idempotency gate)
-│   ├── src/prompts/           versioned prompts (spec.v1, sprite.v1, sfx.v1)
+│   ├── src/procedures/        gen_spec, gen_sfx, gen_commentary, gen_announcement (+ shared gate)
+│   ├── src/prompts/           versioned prompts (spec.v1, sfx.v1, commentary.v1)
 │   └── src/lib/               phases (state machine), sim (battle), weapons (fallbacks), s3, time…
 ├── packages/spec/             shared contract: types, enums, colors, validation, balance formula,
 │   ├── src/                   feature extraction, deterministic fallbacks, seeded RNG
@@ -103,7 +103,7 @@ Then set `VITE_STDB_URI=wss://maincloud.spacetimedb.com` in `.env`.
 | `VITE_STDB_URI` | client | `ws://localhost:3000` locally, `wss://maincloud.spacetimedb.com` in prod |
 | `VITE_STDB_DB` | client, scripts | database name, default `doodle-arena` |
 | `VITE_PUBLIC_URL` | client (`/screen`) | base URL in the QR code; your LAN IP in dev |
-| `GEMINI_API_KEY`, `ASI_ONE_API_KEY`, `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`, `AWS_*`, `S3_BUCKET`, `ASSET_BASE_URL` | **server, via the `secrets` table** | the module doesn't read these from env; load them with `set-secrets` |
+| `ASI_ONE_API_KEY`, `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`, `AWS_*`, `S3_BUCKET`, `ASSET_BASE_URL` | **server, via the `secrets` table** | the module doesn't read these from env; load them with `set-secrets` |
 
 Only `VITE_*` variables reach the browser. **Never put an API key in a `VITE_` variable.**
 
@@ -115,7 +115,7 @@ API keys live in the private `secrets` table. Only `set_secret` can write it, an
 pnpm tsx scripts/set-secrets.ts             # local
 pnpm tsx scripts/set-secrets.ts maincloud   # Maincloud
 # or a single key:
-spacetime call doodle-arena set_secret '"GEMINI_API_KEY"' '"…"'
+spacetime call doodle-arena set_secret '"ASI_ONE_API_KEY"' '"…"'
 ```
 
 The script uses `spacetime call`, so the calls run as your CLI identity. It never prints the values.
@@ -137,7 +137,7 @@ The load test checks that the 20 Hz tick holds with 12 clients on Maincloud. If 
 ## How it fits together
 
 ```
-/play ──reducers──▶ SpacetimeDB module ◀──procedures──▶ Gemini / Nano Banana / ElevenLabs → S3
+/play ──reducers──▶ SpacetimeDB module ◀──procedures──▶ ASI:One (Fetch.ai) / ElevenLabs
                         │  tick() @ 20 Hz (scheduled reducer)
 /screen ◀─subscriptions─┘  renders ~100 ms behind, interpolates, never simulates
 ```
@@ -177,7 +177,7 @@ The load test checks that the 20 Hz tick holds with 12 clients on Maincloud. If 
   - Lobby: `createRoom`, `joinRoom`, `startRound`
   - Round: `submitDrawing`, `setDrop`, `setInput`, `pressAttack`
   - System: `tick` (scheduled), `setSecret`, `init`, `onDisconnect`
-- **Procedures:** `genSpec`, `genSprite`, `genSfx`. They take no arguments and act for `ctx.sender`. Each one first runs the shared check in `loadJob()`: the room must be in draw/drop and the target field must be empty. It writes only through `writeIfStillPending()`, so results that arrive after Reveal are discarded and the fallback stays.
+- **Procedures:** `genSpec`, `genSfx` (weapon generation), plus `genCommentary` and `genAnnouncement` (voice). They take no arguments and act for `ctx.sender`. Each one first runs the shared check in `loadJob()`: the room must be in draw/drop and the target field must be empty. It writes only through `writeIfStillPending()`, so results that arrive after Reveal are discarded and the fallback stays.
 
 ---
 
@@ -216,7 +216,7 @@ The load test checks that the 20 Hz tick holds with 12 clients on Maincloud. If 
 - **Waits it shows:**
   - the phase countdown, and phases that are **overdue** ("server is NOT advancing")
   - drawings received per player
-  - each player's weapon status (`spec ✓ sprite … sfx …`)
+  - each player's weapon status (`spec ✓ sfx …`)
   - generation calls in flight, with elapsed time
   - a **stalled tick** during battle (no fighter updates for over 1 s)
 - Per-room isolation: `tick()` runs each room in its own `try/catch`. One room's error is logged and the other rooms keep running. (Before this, a stale fighter row in one room froze every room.)
@@ -285,12 +285,13 @@ A voiced announcer on the shared screen that riffs on players' names and their w
 - **Fallback:** if `character.glb` fails to load, both `/screen` and `/dev/weapons` use the 2D rig and the Pixi grid.
 - **Playground flags:** `/dev/weapons?pose=swing&t=1.5&noweapon&run` freezes the body at a point in the attack (`t` 0–1 wind-up, 1–2 strike, 2–3 recover), hides the weapon, and turns on running. Use these to tune poses.
 
-### Spec providers (Gemini vs. ASI:One)
-- `SPEC_PROVIDER` in `server/src/config.ts` picks who answers `gen_spec`. It defaults to `'asi1'` (Fetch.ai's ASI:One); switch to `'gemini'` to compare. Each provider is about 30 lines in `server/src/procedures/spec_providers.ts`, and its only job is to return raw JSON text.
-- Whichever provider runs, its output goes through the same validation, balance and fallback. A provider is a supplier, never the backend.
-- The two schemas live side by side in `server/src/prompts/spec.v1.ts`. `SPEC_GEMINI_SCHEMA` uses Gemini's OpenAPI subset. `SPEC_JSON_SCHEMA` is standard JSON Schema for OpenAI-style strict mode, which requires `additionalProperties: false` everywhere and every key in `required`. `server/test/spec-schema.test.ts` keeps both rules true.
-- `spacetime logs` shows `[gen] spec asi1/spec.v1 <player>: 3.4s, 1 field(s) fixed` per weapon. That line is the speed and quality baseline for choosing a provider.
+### LLM provider: ASI:One only
+- All language-model work goes to **ASI:One (Fetch.ai)**. Weapon specs use `asi1`, which accepts the doodle image. Commentary lines use `asi1-mini`. **Gemini is not used** (removed 2026-10-03).
+- `SPEC_PROVIDER` in `server/src/config.ts` is `'asi1'`. The request builder lives in `server/src/procedures/spec_requests.ts`, shared with `pnpm lab`.
+- Strict JSON output: `SPEC_JSON_SCHEMA` in `server/src/prompts/spec.v1.ts` follows OpenAI-style strict mode: `additionalProperties: false` everywhere and every key in `required`. `server/test/spec-schema.test.ts` keeps it valid and matched to the WeaponSpec fields.
+- `spacetime logs` shows `[gen] spec asi1/spec.v1 <player>: 3.4s, 1 field(s) fixed` per weapon.
 - The Fetch.ai **Weapon Smith agent** (`agents/weapon_smith/`) wraps the same prompt and schema behind a REST endpoint, ready for Phase 2 (`SPEC_PROVIDER = 'agent'`). Run `pnpm agents:schema` after any prompt or enum change to keep it in sync.
+- **No AI sprites.** Gemini's image model was the only sprite generator, so weapons always use the player's own doodle, cut out of its white background with an outline and glow. `weapon.spriteUrl` is kept for a future image provider.
 
 ### Fallbacks (round never stalls)
 | Missing at Reveal | Where | Fallback |
@@ -308,8 +309,8 @@ A voiced announcer on the shared screen that riffs on players' names and their w
 - Prompts live only in `server/src/prompts/`. The client never imports them.
 
 ### Known open questions for M3
-- **Background removal + orientation for sprites.** The plan is to do it in `gen_sprite` with a pure-JS PNG codec such as `fast-png`. Easier option: do it on the shared screen at texture load, where a canvas is available.
-- **S3 uploads.** `server/src/lib/s3.ts` is a stub that throws. Callers catch the error, so the sprite and sfx fallbacks kick in. To implement it, sign SigV4 with `@noble/hashes`, or call a tiny Lambda that hands out presigned PUT URLs.
+- **Sprites:** none generated (no image provider since Gemini was removed). The shared screen cuts the doodle out of its white background at load time (`packages/engine/src/cutout.ts`).
+- **S3 uploads.** `server/src/lib/s3.ts` is a stub that throws, and nothing calls it any more: sounds are stored inline and there are no generated sprites. Only needed if an image provider comes back. To implement it, sign SigV4 with `@noble/hashes`, or call a tiny Lambda that hands out presigned PUT URLs.
 - **Model IDs** in `server/src/config.ts` are placeholders. Check them against Google's current model list.
 - **Who triggers generation.** The brief has the controller call the procedures right after `submit_drawing`. A sturdier option is for `submit_drawing` to insert rows into three one-shot schedule tables bound to the procedures. Generation would then still run if a phone locks mid-round.
 

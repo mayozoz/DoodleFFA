@@ -1,13 +1,17 @@
-import type { Phase } from '@doodle/spec';
+import { revealSeconds, revealSlot, type Phase } from '@doodle/spec';
+import { secondsLeft } from '../../net/clock';
 import type { DbConnection } from '../../module_bindings';
 import { debug } from '../../debug';
 
-// Shared-screen announcer. Asks the server (gen_commentary) for one voiced line at a time and
-// plays it. Big moments (KO, final two, winner) jump the queue; routine play-by-play only fills
-// silence. Muting stops requests entirely, so a muted screen costs nothing.
+// Shared-screen announcer.
+//  - Reveal: reads ONLY each player's weapon name ("Mei's Thornwhip!"), one clip per weapon,
+//    played as that weapon comes on stage (same revealSlot timing as the showcase).
+//  - Battle/results: asks the server (gen_commentary) for one voiced line at a time. Big moments
+//    (KO, final two, winner) jump the queue; routine play-by-play only fills silence.
+// Muting stops requests entirely, so a muted screen costs nothing.
 
-type Kind = 'intro' | 'color' | 'ko' | 'final' | 'winner';
-const PRIORITY: Record<Kind, number> = { color: 0, intro: 1, final: 2, ko: 2, winner: 3 };
+type Kind = 'color' | 'ko' | 'final' | 'winner';
+const PRIORITY: Record<Kind, number> = { color: 0, final: 2, ko: 2, winner: 3 };
 const COLOR_EVERY_MS = 7000;
 /** a KO line that took longer than this to arrive is old news */
 const STALE_MS = 4500;
@@ -101,10 +105,61 @@ export function mountCommentator(conn: DbConnection, code: string): { setPhase(p
     if (phase === 'battle' && !busy && Date.now() - lastLineAt > COLOR_EVERY_MS) want('color');
   }, 1000);
 
+  // ── Reveal: weapon-name intros, synced to the showcase ──
+  let introTimer = 0;
+  const runIntro = () => {
+    window.clearInterval(introTimer);
+    if (muted) return;
+    // same order as the showcase (reveal.ts): weapons in this room, by color slot
+    const players = new Map([...conn.db.player.iter()].filter((p) => p.roomCode === code).map((p) => [p.identity.toHexString(), p]));
+    const order = [...conn.db.weapon.iter()]
+      .filter((w) => w.roomCode === code && players.has(w.player.toHexString()))
+      .map((w) => w.player.toHexString())
+      .sort((x, y) => players.get(x)!.colorSlot - players.get(y)!.colorSlot);
+    const n = order.length;
+    if (!n) return;
+    const clips: (Uint8Array | null)[] = order.map(() => null);
+    // fetch sequentially, in stage order, so the first clip is ready first
+    void (async () => {
+      for (let i = 0; i < n; i++) {
+        if (phase !== 'reveal' || muted) return;
+        try { clips[i] = await debug.track(`intro ${i + 1}/${n}`, conn.procedures.genCommentary({ kind: 'weapon', a: order[i]!, b: '' })); }
+        catch (e) { debug.error('commentary intro', e); }
+      }
+    })();
+    const total = revealSeconds(n);
+    let played = -1;
+    introTimer = window.setInterval(() => {
+      const r = conn.db.room.code.find(code);
+      if (phase !== 'reveal' || !r || muted) return window.clearInterval(introTimer);
+      const slot = revealSlot(total - secondsLeft(r.phaseEndsAt), n);
+      if (slot.kind !== 'weapon' || slot.index <= played) return;
+      const clip = clips[slot.index];
+      if (!clip?.length) {
+        if (slot.progress > 0.5) played = slot.index; // arrived too late for this weapon: skip it
+        return;
+      }
+      played = slot.index;
+      playNow(clip);
+    }, 80);
+  };
+
+  /** Start a clip right away, cutting whatever is playing (keeps the intro in sync with the stage). */
+  const playNow = (bytes: Uint8Array) => {
+    audio?.pause();
+    const url = URL.createObjectURL(new Blob([bytes.slice()], { type: 'audio/mpeg' }));
+    audio = new Audio(url);
+    audio.volume = 0.95;
+    audio.onended = () => URL.revokeObjectURL(url);
+    lastLineAt = Date.now();
+    audio.play().catch((e: unknown) => debug.error('commentary', `audio blocked: ${String(e)} — click the commentary button`));
+  };
+
   return {
     setPhase(p) {
       phase = p;
-      if (p === 'reveal') { finalCalled = false; want('intro'); }
+      if (p === 'reveal') { finalCalled = false; runIntro(); }
+      else window.clearInterval(introTimer);
       if (p === 'results') {
         const winner = conn.db.room.code.find(code)?.winner ?? '';
         want('winner', winner);
@@ -113,6 +168,7 @@ export function mountCommentator(conn: DbConnection, code: string): { setPhase(p
     },
     dispose() {
       clearInterval(color);
+      window.clearInterval(introTimer);
       conn.db.fxEvent.removeOnInsert(onFx);
       audio?.pause();
       btn.remove();

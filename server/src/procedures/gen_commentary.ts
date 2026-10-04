@@ -8,7 +8,12 @@ import { COMMENTARY_SYSTEM_PROMPT } from '../prompts/commentary.v1';
 import { secondsBetween } from '../lib/time';
 import type { PCtx } from './common';
 
-const KINDS = ['intro', 'color', 'ko', 'final', 'winner'] as const;
+/**
+ * weapon: Reveal intro — just "<player>'s <weapon name>!" for focus `a`, spoken as-is (no LLM),
+ *         one per weapon as it comes on stage.
+ * others: an LLM-written play-by-play line.
+ */
+const KINDS = ['weapon', 'color', 'ko', 'final', 'winner'] as const;
 type Kind = (typeof KINDS)[number];
 const EMPTY = new Uint8Array();
 
@@ -28,7 +33,7 @@ export const genCommentary = spacetimedb.procedure(
     const job = load(ctx, kind as Kind, a, b);
     if (!job) return EMPTY;
     try {
-      const line = writeLine(ctx, job.asiKey, job.snapshot);
+      const line = kind === 'weapon' ? job.weaponLine : writeLine(ctx, job.asiKey, job.snapshot);
       if (!line) return EMPTY;
       return speak(ctx, job.elevenKey, line);
     } catch (e) {
@@ -46,6 +51,18 @@ function load(ctx: PCtx, kind: Kind, a: string, b: string) {
     const elevenKey = tx.db.secrets.key.find('ELEVENLABS_API_KEY')?.value;
     if (!asiKey || !elevenKey) return null;
 
+    const players = [...tx.db.player.roomCode.filter(r.code)];
+
+    // Reveal intro: only "<player>'s <weapon name>!", read verbatim. Cheap (speech only, no
+    // LLM), so it's outside the per-round line budget; only during Reveal, only for this room.
+    if (kind === 'weapon') {
+      const p = players.find((x) => x.identity.toHexString() === a);
+      const w = p && tx.db.weapon.player.find(p.identity);
+      if (r.phase !== 'reveal' || !p || !w?.spec) return null;
+      const weapon = (JSON.parse(w.spec) as StoredWeapon).spec.name;
+      return { asiKey, elevenKey, snapshot: null, weaponLine: `${p.name}'s ${weapon}!` };
+    }
+
     // throttle: min gap + max lines per round (cost guard)
     const c = tx.db.commentary.roomCode.find(r.code);
     const fresh = !c || c.round !== r.round;
@@ -57,7 +74,6 @@ function load(ctx: PCtx, kind: Kind, a: string, b: string) {
     if (c) tx.db.commentary.roomCode.update(row);
     else tx.db.commentary.insert(row);
 
-    const players = [...tx.db.player.roomCode.filter(r.code)];
     const name = (hex: string) => players.find((p) => p.identity.toHexString() === hex)?.name ?? '';
     const snapshot = {
       event: kind,
@@ -77,7 +93,7 @@ function load(ctx: PCtx, kind: Kind, a: string, b: string) {
         };
       }),
     };
-    return { asiKey, elevenKey, snapshot };
+    return { asiKey, elevenKey, snapshot, weaponLine: '' };
   });
 }
 

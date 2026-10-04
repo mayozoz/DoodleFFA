@@ -7,7 +7,7 @@
 .battle-stick-zone .back { background: #ffffff0d !important; border: 1px solid #ffffff40; opacity: 1 !important; }
 .battle-stick-zone .front { background: #ffffff80 !important; opacity: 1 !important; }
 .battle-attack-zone { display: grid; place-items: center; padding-right: env(safe-area-inset-right); }
-.battle-attack-frame { position: relative; width: clamp(168px, 48vmin, 240px); max-width: 100%; aspect-ratio: 1; }
+.battle-attack-frame { position: relative; width: clamp(200px, 64vmin, 320px); max-width: 100%; aspect-ratio: 1; }
 .battle-sword-button {
   position: absolute; inset: 8%; width: 84%; height: 84%; padding: 0;
   display: grid; place-items: center; border-radius: 50%; border: 1.5px solid #ffffffb3;

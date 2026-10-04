@@ -55,36 +55,21 @@ export function applyFallbacks(ctx: Ctx, roomCode: string, seed: number) {
 }
 
 /**
- * Which generation steps can actually finish this round. A step without its keys (or with M1's
- * hard-coded swing) will never write anything, so Drop shouldn't wait for it.
- */
-function expectedSteps(ctx: Ctx) {
-  const has = (k: string) => !!ctx.db.secrets.key.find(k)?.value;
-  const s3 = has('AWS_ACCESS_KEY_ID') && has('AWS_SECRET_ACCESS_KEY') && has('S3_BUCKET');
-  return {
-    sprite: has('GEMINI_API_KEY') && s3,
-    sfx: has('ELEVENLABS_API_KEY') && s3,
-  };
-}
-
-/**
- * Drop may end early: past the minimum, every connected player has dropped, and every weapon
- * has everything it's still expecting. The phase timer stays the hard cap, so a slow or failed
+ * Drop may end early: past the minimum, every connected player has dropped, and no weapon spec
+ * is still being generated. The phase timer stays the hard cap, so a slow or failed
  * call can only make Drop as long as it is today — never stall the round.
  */
 export function dropCanEndEarly(ctx: Ctx, r: RoomRow, elapsedS: number, minS: number): boolean {
   if (elapsedS < minS) return false;
   const players = [...ctx.db.player.roomCode.filter(r.code)].filter((p) => p.connected);
   if (players.length === 0 || players.some((p) => p.dropX < 0)) return false;
-  const want = expectedSteps(ctx);
   for (const p of players) {
     const w = ctx.db.weapon.player.find(p.identity);
     if (!w || w.roomCode !== r.code) return false; // drawing not in yet
     // gen_spec marks the weapon 'generating' when it starts and clears it when done or failed,
     // so Drop waits only for specs that were actually requested.
     if (w.status === 'generating') return false;
-    if (want.sprite && !w.spriteUrl) return false;
-    if (want.sfx && !w.sfxUrl) return false;
+    // Sounds (inline, ~3–5 s) aren't waited on: they can still land during Reveal.
   }
   return true;
 }

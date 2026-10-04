@@ -2,8 +2,7 @@
 // the real validator + balance, and print what each one became. For tuning the prompt and
 // checking providers without playing a round.
 //
-//   pnpm lab                      # every doodle, SPEC_PROVIDER from server config
-//   pnpm lab --provider gemini    # compare providers
+//   pnpm lab                      # every doodle through ASI:One
 //   pnpm lab --only sword,bow --runs 3
 //
 // Keys come from .env. Results (PNG, raw response, validated spec) → .lab/<timestamp>/
@@ -14,7 +13,7 @@ import { MYSTERY_STICK, balance, extractFeatures, fallbackSpecFromFeatures, vali
 import { BALANCE } from '../server/src/balance';
 import { SPEC_PROVIDER, type SpecProvider } from '../server/src/config';
 import { NAME_FLAVORS, SPEC_PROMPT_VERSION, SPEC_SYSTEM_PROMPT } from '../server/src/prompts/spec.v1';
-import { asi1Request, asi1Text, geminiRequest, geminiText } from '../server/src/procedures/spec_requests';
+import { asi1Request, asi1Text } from '../server/src/procedures/spec_requests';
 import { rasterize } from './lab/png';
 import { SYNTHETIC } from './lab/synthetic';
 
@@ -36,7 +35,6 @@ try {
 
 const P = {
   asi1: { key: env.ASI_ONE_API_KEY, build: asi1Request, text: asi1Text },
-  gemini: { key: env.GEMINI_API_KEY, build: geminiRequest, text: geminiText },
 }[provider];
 if (!P?.key) { console.error(`no key for ${provider} in .env`); process.exit(1); }
 

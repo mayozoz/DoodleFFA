@@ -39,7 +39,11 @@ export const GAME = {
   maxHp: MAX_HP,
   hitRadius: 0.5,
   moveSpeed: 5, // units / s
-  /** arena half-width = base + perPlayer × n; half-height follows the screen aspect (arenaExtents) */
+  /**
+   * Arena size grows with the player count: half-width = base + perPlayer × n
+   * (2 players → 11 units, 4 → 14, 8 → 20, 12 → 26); half-height follows the screen aspect
+   * (arenaExtents). The shared screen zooms to fit, so bigger games show smaller fighters.
+   */
   arenaBaseRadius: 8,
   arenaPerPlayer: 1.5,
   stormStartS: 10,

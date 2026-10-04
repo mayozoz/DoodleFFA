@@ -38,7 +38,7 @@ export function mountScreenDebug(conn: DbConnection, code: string) {
         const w = weapons.get(p.identity.toHexString());
         const step = (done: boolean, name: string) => `${name} ${done ? '✓' : '…'}`;
         const text = w
-          ? `${p.name}: ${w.status} · ${step(!!w.spec, 'spec')} ${step(!!w.spriteUrl, 'sprite')} ${step(!!w.sfxUrl, 'sfx')}`
+          ? `${p.name}: ${w.status} · ${step(!!w.spec, 'spec')} ${step(!!w.sfxUrl, 'sfx')}`
           : `${p.name}: no drawing yet`;
         items.push({ level: !w ? 'wait' : w.status === 'pending' || w.status === 'generating' ? 'wait' : w.status === 'fallback' ? 'warn' : 'ok', text });
       }

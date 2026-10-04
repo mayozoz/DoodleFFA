@@ -48,50 +48,6 @@ export const NAME_FLAVORS = [
   'pirate slang',
 ];
 
-/** Gemini `responseSchema` (OpenAPI subset). Keep in sync with SPEC_JSON_SCHEMA below. */
-export const SPEC_GEMINI_SCHEMA = {
-  type: 'OBJECT',
-  properties: {
-    name: { type: 'STRING' },
-    grip: { type: 'ARRAY', items: { type: 'NUMBER' } },
-    tip: { type: 'ARRAY', items: { type: 'NUMBER' } },
-    archetype: { type: 'STRING', enum: [...ARCHETYPES] },
-    range: { type: 'NUMBER' },
-    area: { type: 'NUMBER' },
-    projectile: {
-      type: 'OBJECT',
-      nullable: true,
-      properties: {
-        count: { type: 'INTEGER' },
-        spread_deg: { type: 'NUMBER' },
-        speed: { type: 'NUMBER' },
-        behavior: { type: 'STRING', enum: [...PROJECTILE_BEHAVIORS] },
-      },
-    },
-    on_hit: { type: 'ARRAY', items: { type: 'STRING', enum: [...ON_HIT] } },
-    vfx: {
-      type: 'ARRAY',
-      items: {
-        type: 'OBJECT',
-        properties: {
-          type: { type: 'STRING', enum: [...VFX_TYPES] },
-          where: { type: 'STRING', enum: [...VFX_WHERE] },
-          intensity: { type: 'NUMBER' },
-        },
-        required: ['type', 'where', 'intensity'],
-      },
-    },
-    motion: {
-      type: 'OBJECT',
-      properties: { elasticity: { type: 'NUMBER' }, weight: { type: 'NUMBER' }, wobble: { type: 'NUMBER' } },
-      required: ['elasticity', 'weight', 'wobble'],
-    },
-    palette: { type: 'ARRAY', items: { type: 'STRING' } },
-    sfx_prompt: { type: 'STRING' },
-  },
-  required: ['name', 'grip', 'tip', 'archetype', 'range', 'area', 'on_hit', 'vfx', 'motion', 'palette', 'sfx_prompt'],
-} as const;
-
 /**
  * Standard JSON Schema for OpenAI-style `response_format: json_schema` (ASI:One, and the
  * Weapon Smith agent via scripts/export-agent-schema.ts). Written to satisfy `strict: true`:

@@ -182,7 +182,7 @@ export const debugEvent = table(
   {
     id: t.u64().primaryKey().autoInc(),
     roomCode: t.string().index('btree'),
-    source: t.string(), // 'tick' | 'gen_spec' | 'gen_sprite' | 'gen_sfx' | ...
+    source: t.string(), // 'tick' | 'gen_spec' | 'gen_sfx' | 'gen_announcement' | ...
     message: t.string(),
     createdAt: t.timestamp(),
   },

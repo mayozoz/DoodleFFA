@@ -2,7 +2,7 @@ import { TimeDuration } from 'spacetimedb';
 import { TIMEOUT_MS, type SecretKey, type SpecProvider } from '../config';
 import { toBase64 } from '../lib/base64';
 import type { PCtx } from './common';
-import { asi1Request, asi1Text, geminiRequest, geminiText, type HttpCall, type SpecRequest } from './spec_requests';
+import { asi1Request, asi1Text, type HttpCall, type SpecRequest } from './spec_requests';
 
 // Each provider turns (doodle PNG, features, system prompt) into raw JSON text, or throws.
 // They do nothing else: validation, balance and the DB write happen in gen_spec.
@@ -21,7 +21,6 @@ interface Provider {
 }
 
 export const SPEC_PROVIDERS: Record<SpecProvider, Provider> = {
-  gemini: { secret: 'GEMINI_API_KEY', build: geminiRequest, text: geminiText },
   /** ASI:One (Fetch.ai), OpenAI-compatible chat completions with strict JSON-schema output. */
   asi1: { secret: 'ASI_ONE_API_KEY', build: asi1Request, text: asi1Text },
 };

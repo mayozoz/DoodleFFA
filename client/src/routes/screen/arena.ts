@@ -8,7 +8,7 @@ import {
   ABILITY_TUNING, DEFAULT_SWING, MAX_HP, arenaExtents, colorForSlot, isAbilityId,
   type AbilityObjectData, type FighterEffects, type Marker, type Phase, type ProjectileMeta, type StoredWeapon,
 } from '@doodle/spec';
-import { PROJECTILE } from '../../../../server/src/balance';
+import { GAME, PROJECTILE } from '../../../../server/src/balance';
 import { secondsLeft, serverNowMs } from '../../net/clock';
 import type { DbConnection } from '../../module_bindings';
 import { hexToNum } from '../../ui/theme';
@@ -32,6 +32,9 @@ interface FighterView {
   stored: StoredWeapon;
   /** set once HP hits 0; the avatar + weapon fade out and stay hidden for the rest of the round */
   dead: boolean;
+  /** px-per-unit the weapon sprite was built at; the hand rescales by unit / weaponUnit so the
+   *  weapon keeps its world size as the arena (and the zoom) grows with the player count */
+  weaponUnit: number;
   effects: FighterEffects;
   grayscale: ColorMatrixFilter;
 }
@@ -208,7 +211,7 @@ export class Arena {
       body3d = new Character3D(this.asset, tint);
       this.stage3d.scene.add(body3d.root);
     }
-    const v: FighterView = { char, body3d, last: null, weapon: null, interp: new Interpolator(), lastAttack: 0n, stored: PLACEHOLDER, dead: false, effects: {}, grayscale: new ColorMatrixFilter() };
+    const v: FighterView = { char, body3d, last: null, weapon: null, interp: new Interpolator(), lastAttack: 0n, stored: PLACEHOLDER, dead: false, weaponUnit: this.unit, effects: {}, grayscale: new ColorMatrixFilter() };
     v.grayscale.desaturate();
     this.fighters.set(hex, v);
     const row = [...this.conn.db.fighter.iter()].find((f) => f.player.toHexString() === hex);
@@ -233,6 +236,7 @@ export class Arena {
 
     v.weapon?.destroy();
     v.weapon = createWeaponSprite(tex, v.stored, this.unit, raw);
+    v.weaponUnit = this.unit;
     baseFilters.set(v.weapon, v.weapon.filters ? [...v.weapon.filters] : []);
     v.char.hand.addChild(v.weapon);
   }
@@ -312,7 +316,7 @@ export class Arena {
       // the owner's actual weapon flies; their hand is empty until it comes back
       const s = new Sprite(fv.weapon.texture);
       s.anchor.copyFrom(fv.weapon.anchor);
-      s.scale.set(fv.weapon.scale.x * 0.8);
+      s.scale.set(fv.weapon.scale.x * 0.8 * fv.char.hand.scale.x); // same zoom as the hand
       if (fv.weapon.filters) s.filters = [...fv.weapon.filters];
       view.addChild(s);
       fv.weapon.visible = false;
@@ -437,8 +441,10 @@ export class Arena {
         v.weapon.filters = immunity ? [...base, v.grayscale] : base;
         v.weapon.alpha = immunity ? 0.65 : 1;
       }
-      // Scale the hand container so attack animation retains ownership of sprite scale.
-      v.char.hand.scale.set(live('weapon_boost') ? ABILITY_TUNING.weaponScale : 1);
+      // Scale the hand container (not the sprite, which attack animations own): Weapon boost, and
+      // the current zoom vs. the zoom the sprite was built at — bigger arena → smaller weapon.
+      const zoom = this.unit / (v.weaponUnit || this.unit);
+      v.char.hand.scale.set((live('weapon_boost') ? ABILITY_TUNING.weaponScale : 1) * zoom);
       const moved = v.last ? Math.hypot(s.x - v.last.x, s.y - v.last.y) : 0;
       v.last = { x: s.x, y: s.y };
       const speed = Math.min(1, moved / Math.max(1e-3, dt * MOVE_SPEED));
@@ -509,7 +515,7 @@ export class Arena {
     const r = this.conn.db.room.code.find(this.code);
     // Before battle the room has no arena size yet; preview with the size this many players will get.
     const count = [...this.conn.db.player.iter()].filter((p) => p.roomCode === this.code).length;
-    const { hw, hh } = arenaExtents(r?.arenaR || 8 + 1.5 * count);
+    const { hw, hh } = arenaExtents(r?.arenaR || GAME.arenaBaseRadius + GAME.arenaPerPlayer * count);
     for (const p of this.conn.db.player.iter()) {
       if (p.roomCode !== this.code || p.dropX < 0) continue;
       const g = new Graphics();

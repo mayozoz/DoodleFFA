@@ -1,26 +1,20 @@
 // External service config. Model IDs move fast — verify against provider docs before M3.
 
 /**
- * Which provider answers gen_spec. Swapping this is the only change needed; validation,
+ * Which provider answers gen_spec. ASI:One (Fetch.ai) is the only LLM provider; validation,
  * balance and fallbacks don't care where the JSON came from.
  * Phase 2 adds 'agent' (the Weapon Smith uAgent in agents/weapon_smith/).
  */
-export type SpecProvider = 'gemini' | 'asi1';
+export type SpecProvider = 'asi1';
 export const SPEC_PROVIDER: SpecProvider = 'asi1';
 
 export const MODELS = {
-  /** gen_spec via Gemini: multimodal, structured JSON output */
-  // gemini-2.5-flash is closed to new API users (404). Verified against the live model list 2026-10-03.
-  specGemini: 'gemini-3.8-flash',
   /** gen_spec via ASI:One. Only `asi1` accepts images (not asi1-mini / asi1-ultra). */
   specAsi1: 'asi1',
-  /** gen_sprite: image-to-image ("Nano Banana 2"); the stable id, not -preview */
-  sprite: 'gemini-3.1-flash-image',
   announcement: 'eleven_flash_v2_5',
 } as const;
 
 export const ENDPOINTS = {
-  gemini: (model: string) => `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
   /** OpenAI-compatible chat completions */
   asi1: 'https://api.asi1.ai/v1/chat/completions',
   elevenSfx: 'https://api.elevenlabs.io/v1/sound-generation',
@@ -31,7 +25,6 @@ export const ENDPOINTS = {
 
 export const TIMEOUT_MS = {
   spec: 12_000,
-  sprite: 30_000,
   sfx: 30_000,
   announcement: 12_000,
 } as const;
@@ -53,7 +46,6 @@ export const COMMENTARY = {
 
 /** Keys expected in the private `secrets` table (set via set_secret). */
 export const SECRET_KEYS = [
-  'GEMINI_API_KEY',
   'ASI_ONE_API_KEY',
   'ELEVENLABS_API_KEY',
   'ELEVENLABS_VOICE_ID',

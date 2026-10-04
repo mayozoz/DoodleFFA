@@ -224,7 +224,7 @@ export function stepAbilityObjects(ctx: Ctx, r: RoomRow, all: Map<string, Fighte
         if (d.kind === 'drain' && owner && owner.hp > 0) owner.hp = Math.min(GAME.maxHp, owner.hp + damage(o, T.drainDps * dt, now));
         if (d.kind === 'bomb') {
           const hits = bombHits.get(d.hits![0]!)!;
-          if (!hits.has(id)) { damage(o, GAME.maxHp * T.blastDamageFraction, now); hits.add(id); }
+          if (!hits.has(id)) { damage(o, T.blastDamage, now); hits.add(id); }
         }
       }
     }

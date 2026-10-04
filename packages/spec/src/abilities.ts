@@ -1,5 +1,8 @@
-/** Shared ability catalogue; durations and cooldowns are in seconds. */
-export const ABILITIES = {
+/**
+ * Relative ability cooldowns (seconds, before scaling). Tune these against each other; the
+ * absolute ceiling is MAX_ABILITY_COOLDOWN_S. The nukes are the longest by design.
+ */
+const BASE = {
   flash: { name: 'Flash', cooldown: 8, duration: 0 },
   dash: { name: 'Dash attack', cooldown: 10, duration: 0 },
   smoke: { name: 'Smoke', cooldown: 12, duration: 4 },
@@ -21,8 +24,20 @@ export const ABILITIES = {
   freeze: { name: 'Freeze', cooldown: 16, duration: 3 },
   shrink: { name: 'Shrink', cooldown: 14, duration: 6 },
 } as const;
+
+/** Longest cooldown any ability may have (the nukes). Everything else scales proportionally. */
+export const MAX_ABILITY_COOLDOWN_S = 22;
+
+const longest = Math.max(...Object.values(BASE).map((a) => a.cooldown));
+/** scaled, rounded to the nearest 0.5 s */
+const scaled = (s: number) => Math.round(((s * MAX_ABILITY_COOLDOWN_S) / longest) * 2) / 2;
+
+/** Shared ability catalogue; durations and cooldowns are in seconds (cooldowns already scaled). */
+export const ABILITIES = Object.fromEntries(
+  Object.entries(BASE).map(([id, a]) => [id, { ...a, cooldown: scaled(a.cooldown) }]),
+) as { readonly [K in keyof typeof BASE]: { readonly name: string; readonly cooldown: number; readonly duration: number } };
 export type AbilityId = keyof typeof ABILITIES;
-export const isAbilityId = (id: string): id is AbilityId => Object.hasOwn(ABILITIES, id);
+export const isAbilityId = (id: string): id is AbilityId => Object.hasOwn(BASE, id);
 export interface StatusEffect { until: number; dps?: number }
 /** Unix seconds, always authored using the server clock. */
 export type FighterEffects = Partial<Record<AbilityId | 'poison' | 'burn' | 'silenced' | 'frozen', StatusEffect>>;
@@ -60,7 +75,8 @@ export const ABILITY_TUNING = {
   boomerangReturnAfter: 0.5,
   blastRadius: 1.6,
   blastGridSpacing: 2,
-  blastDamageFraction: 0.2,
+  /** per victim per activation (a victim takes at most one blast from each nuke) */
+  blastDamage: 200,
   blastWindup: 0.6,
   blastSweepSeconds: 3,
   blastVisibleSeconds: 0.5,
