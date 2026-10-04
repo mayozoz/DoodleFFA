@@ -1,5 +1,5 @@
 import {
-  arenaExtents, hashString, mulberry32, rollDamage, stormStartRadius, strikeDelayS,
+  ABILITY_TUNING, arenaExtents, hashString, mulberry32, rollDamage, stormStartRadius, strikeDelayS,
   type ProjectileMeta, type StoredWeapon, type WeaponSpec,
 } from '@doodle/spec';
 import { Timestamp } from 'spacetimedb';
@@ -7,17 +7,40 @@ import { BALANCE, GAME, KNOCKBACK, PROJECTILE } from '../balance';
 import { addSeconds, secondsBetween } from './time';
 import { readWeapon } from './weapons';
 import { contains, meleeShape } from './hitbox';
+import {
+  activateAbility, battleGeometry, damage, hasEffect, hitRadius, moveFighter,
+  stepAbilityObjects, stepStatuses, timeSeconds, untargetable, type BattleGeometry,
+} from './abilities';
 import type { Ctx, FighterRow, RoomRow } from './ctx';
 
 // Battle simulation for one room, one tick. Server-authoritative; clients only render.
 // Budget: O(n²) over ≤12 fighters + projectiles. No spatial index.
 
-/** Per-fighter transient state, stored as JSON in `fighter.effects`. */
-interface Effects {
+/**
+ * Core per-fighter transient state. It lives in the SAME `fighter.effects` JSON as the ability
+ * statuses (burn, poison, frozen, silenced, rage… — see ./abilities.ts), so everything reads and
+ * writes that one object and nothing clobbers anything else.
+ */
+interface CoreFx {
   /** knockback velocity (units/s), decays every tick */
   kb?: [number, number];
   /** queued attack: resolves at `at` (ms since epoch) with the facing locked at press */
   pa?: { at: number; f: number };
+}
+
+function getFx(f: FighterRow): CoreFx {
+  try { const e = JSON.parse(f.effects || '{}') as CoreFx; return { kb: e.kb, pa: e.pa }; } catch { return {}; }
+}
+
+/** Merge a patch into fighter.effects (undefined removes the key), keeping ability statuses. */
+function patchFx(f: FighterRow, patch: Partial<CoreFx>) {
+  let e: Record<string, unknown> = {};
+  try { e = JSON.parse(f.effects || '{}') as Record<string, unknown>; } catch { /* start fresh */ }
+  for (const [k, v] of Object.entries(patch)) {
+    if (v === undefined) delete e[k];
+    else e[k] = v;
+  }
+  f.effects = JSON.stringify(e);
 }
 
 /** Everything a hit needs, shared by melee, projectiles and splashes. */
@@ -26,15 +49,12 @@ interface World {
   r: RoomRow;
   fighters: Map<string, FighterRow>;
   weapons: Map<string, StoredWeapon>;
-  effects: Map<string, Effects>;
   rand: () => number;
+  /** server clock in seconds (ability statuses use it) */
+  seconds: number;
 }
 
 const nowMs = (ctx: Ctx) => Number(ctx.timestamp.microsSinceUnixEpoch / 1000n);
-
-function readEffects(f: FighterRow): Effects {
-  try { return f.effects ? (JSON.parse(f.effects) as Effects) : {}; } catch { return {}; }
-}
 
 /** How far this weapon shoves a victim (world units). */
 export function knockbackDistance(spec: WeaponSpec): number {
@@ -46,46 +66,53 @@ export function knockbackDistance(spec: WeaponSpec): number {
 
 export function stepBattle(ctx: Ctx, r: RoomRow, dt: number) {
   const now = ctx.timestamp;
+  const seconds = timeSeconds(ctx);
   const elapsed = secondsBetween(r.phaseStartedAt, now);
   const rand = mulberry32(r.seed ^ hashString(`${Math.floor(elapsed * GAME.tickHz)}`));
 
   const fighters = new Map<string, FighterRow>();
   const weapons = new Map<string, StoredWeapon>();
-  const effects = new Map<string, Effects>();
   for (const f of ctx.db.fighter.roomCode.filter(r.code)) {
     if (f.hp <= 0) continue;
     const id = f.player.toHexString();
     fighters.set(id, { ...f });
     weapons.set(id, readWeapon(ctx.db.weapon.player.find(f.player)));
-    effects.set(id, readEffects(f));
   }
 
-  // 1. Movement (clamped to the screen-shaped arena rectangle)
+  // 0. Ability statuses: damage-over-time ticks, expiry.
+  stepStatuses(ctx, fighters, dt);
+  const geometry = battleGeometry(ctx, r);
+
+  // 1. Movement. moveFighter clamps to the arena rectangle and to mini-arena walls (sub-stepped,
+  //    so knockback and dashes can't tunnel through) and respects Shrink's smaller body.
   const { hw, hh } = arenaExtents(r.arenaR);
   const mx = hw - GAME.hitRadius, my = hh - GAME.hitRadius;
   const decay = Math.exp(-dt / KNOCKBACK.decayS);
   for (const [id, f] of fighters) {
-    // knockback push (applied even if the player isn't touching the stick)
-    const fx = effects.get(id)!;
-    if (fx.kb) {
-      f.x += fx.kb[0] * dt;
-      f.y += fx.kb[1] * dt;
-      fx.kb = [fx.kb[0] * decay, fx.kb[1] * decay];
-      if (Math.hypot(fx.kb[0], fx.kb[1]) < 0.2) delete fx.kb;
-      f.x = Math.max(-mx, Math.min(mx, f.x));
-      f.y = Math.max(-my, Math.min(my, f.y));
+    // knockback push — applies even to frozen players or ones not touching the stick
+    const { kb } = getFx(f);
+    if (kb) {
+      moveFighter(ctx, r, f, f.x + kb[0] * dt, f.y + kb[1] * dt, geometry);
+      const next: [number, number] = [kb[0] * decay, kb[1] * decay];
+      patchFx(f, { kb: Math.hypot(next[0], next[1]) < 0.2 ? undefined : next });
     }
     const input = ctx.db.input.player.find(f.player);
-    if (!input) continue;
-    const speed = GAME.moveSpeed * weapons.get(id)!.stats.moveSpeedMul; // TODO(M2): × slow effect
-    f.x += input.dx * speed * dt;
-    f.y += input.dy * speed * dt;
+    if (!input || hasEffect(f, 'frozen', seconds)) continue;
+    const speed = GAME.moveSpeed * weapons.get(id)!.stats.moveSpeedMul; // TODO: × slow effect
     if (input.dx !== 0 || input.dy !== 0) f.facing = Math.atan2(input.dy, input.dx);
-    f.x = Math.max(-mx, Math.min(mx, f.x));
-    f.y = Math.max(-my, Math.min(my, f.y));
+    moveFighter(ctx, r, f, f.x + input.dx * speed * dt, f.y + input.dy * speed * dt, geometry);
   }
 
-  const world: World = { ctx, r, fighters, weapons, effects, rand };
+  // 1b. Special abilities: consume the press once (even if cooldown/status rejects it).
+  for (const f of fighters.values()) {
+    const input = ctx.db.input.player.find(f.player);
+    if (!input?.abilityBuffered) continue;
+    ctx.db.input.player.update({ ...input, abilityBuffered: false });
+    if (!hasEffect(f, 'frozen', seconds)) activateAbility(ctx, r, f, fighters);
+  }
+  const aimGeometry = battleGeometry(ctx, r); // abilities may have just added smoke/walls
+
+  const world: World = { ctx, r, fighters, weapons, rand, seconds };
   const tMs = nowMs(ctx);
 
   // Boomerangs: one in the air per owner — you can't throw again until you catch it.
@@ -98,42 +125,50 @@ export function stepBattle(ctx: Ctx, r: RoomRow, dt: number) {
   //     queued to land on the animation's strike frame (strikeDelayS, shared with clients).
   for (const [id, f] of fighters) {
     const input = ctx.db.input.player.find(f.player);
+    // silenced / frozen: the press is dropped, not kept for later
+    if (hasEffect(f, 'silenced', seconds) || hasEffect(f, 'frozen', seconds)) {
+      if (input?.attackBuffered) ctx.db.input.player.update({ ...input, attackBuffered: false });
+      continue;
+    }
     if (!input?.attackBuffered || now.microsSinceUnixEpoch < f.cooldownReadyAt.microsSinceUnixEpoch) continue;
     const w = weapons.get(id)!;
     // boomerang still out: keep the press buffered, it fires the moment the weapon is caught
-    if (w.spec.archetype === 'throw' && (throwing.has(id) || effects.get(id)!.pa)) continue;
-    const target = autoAim(f, fighters);
+    if (w.spec.archetype === 'throw' && (throwing.has(id) || getFx(f).pa)) continue;
+    const target = autoAim(ctx, r, f, fighters, aimGeometry);
     if (target) f.facing = Math.atan2(target.y - f.y, target.x - f.x);
-    effects.get(id)!.pa = { at: tMs + strikeDelayS(w.spec.archetype, w.spec.motion) * 1000, f: f.facing };
+    patchFx(f, { pa: { at: tMs + strikeDelayS(w.spec.archetype, w.spec.motion) * 1000, f: f.facing } });
     emitFx(ctx, r.code, 'attack', f.x, f.y, f.player, f.facing);
-    f.cooldownReadyAt = addSeconds(now, w.stats.cooldown);
+    const rage = hasEffect(f, 'rage', seconds) ? ABILITY_TUNING.attackSpeedMultiplier : 1;
+    f.cooldownReadyAt = addSeconds(now, w.stats.cooldown / rage);
     f.lastAttackAt = now;
     ctx.db.input.player.update({ ...input, attackBuffered: false });
   }
 
-  // 2b. Resolve attacks whose strike frame has arrived.
-  for (const [id, f] of fighters) {
-    const pa = effects.get(id)!.pa;
+  // 2b. Resolve attacks whose strike frame has arrived (frozen mid-swing → the swing fizzles).
+  for (const f of fighters.values()) {
+    const { pa } = getFx(f);
     if (!pa || tMs < pa.at) continue;
-    delete effects.get(id)!.pa;
-    resolveAttack(world, f, pa.f);
+    patchFx(f, { pa: undefined });
+    if (!hasEffect(f, 'frozen', seconds)) resolveAttack(world, f, pa.f);
   }
 
-  // 3. Projectiles: move, steer, bounce, collide, split, land, expire.
+  // 3. Weapon projectiles (shoot/throw): move, steer, bounce, collide, split, land, expire.
   stepProjectiles(world, dt, mx, my);
 
-  // 4. Other effects (burn/poison DoT, slow, thorns) — TODO: read/write f.effects JSON.
+  // 4. Ability zones, traps and projectiles (smoke, walls, fire, mushrooms, hooks, nukes…).
+  stepAbilityObjects(ctx, r, fighters, weapons, dt);
 
   // 5. Storm: shrinks from stormStartS to suddenDeathS, then sudden death ramps damage.
+  //    damage() respects Invisible.
   const stormR = stormRadius(r, elapsed);
   const sdDps = elapsed >= GAME.suddenDeathS
     ? GAME.suddenDeathDpsStart + (elapsed - GAME.suddenDeathS) * GAME.suddenDeathDpsPerS : 0;
   for (const f of fighters.values()) {
-    if (Math.hypot(f.x - r.stormX, f.y - r.stormY) > stormR) f.hp -= GAME.stormDps * dt;
-    f.hp -= sdDps * dt;
+    if (Math.hypot(f.x - r.stormX, f.y - r.stormY) > stormR) damage(f, GAME.stormDps * dt, seconds);
+    damage(f, sdDps * dt, seconds);
   }
 
-  // 6. Deaths + write back
+  // 6. Deaths + write back (fighter.effects is already up to date via patchFx / setEffect)
   let alive = 0;
   for (const f of fighters.values()) if (f.hp > 0) alive++;
   for (const f of fighters.values()) {
@@ -143,8 +178,6 @@ export function stepBattle(ctx: Ctx, r: RoomRow, dt: number) {
       if (p) ctx.db.player.identity.update({ ...p, alive: false, placement: alive + 1 });
       emitFx(ctx, r.code, 'death', f.x, f.y, f.player, 0);
     }
-    const fx = effects.get(f.player.toHexString());
-    f.effects = fx && Object.keys(fx).length ? JSON.stringify(fx) : '{}';
     ctx.db.fighter.player.update(f);
   }
 
@@ -161,11 +194,11 @@ export function stormRadius(r: RoomRow, elapsed: number): number {
   return start + (end - start) * t;
 }
 
-/** Nearest enemy within ~90° of facing; else nearest overall. */
-function autoAim(f: FighterRow, all: Map<string, FighterRow>): FighterRow | null {
+/** Nearest enemy within ~90° of facing; else nearest overall. Players inside Smoke can't be targeted. */
+function autoAim(ctx: Ctx, r: RoomRow, f: FighterRow, all: Map<string, FighterRow>, geometry: BattleGeometry): FighterRow | null {
   let best: FighterRow | null = null, bestScore = Infinity;
   for (const o of all.values()) {
-    if (o.player.isEqual(f.player)) continue;
+    if (o.player.isEqual(f.player) || o.hp <= 0 || untargetable(ctx, r, o, geometry)) continue;
     const dx = o.x - f.x, dy = o.y - f.y, d = Math.hypot(dx, dy);
     const off = Math.abs(normAngle(Math.atan2(dy, dx) - f.facing));
     const score = d * (off < Math.PI / 2 ? 1 : 2.5);
@@ -179,8 +212,10 @@ function applyHit(wd: World, attackerId: string, o: FighterRow, from: { x: numbe
   const w = wd.weapons.get(attackerId);
   const attacker = wd.fighters.get(attackerId);
   if (!w || o.hp <= 0) return;
-  const dmg = rollDamage(w.stats.damagePerHit, wd.rand, BALANCE) * mul;
-  o.hp -= dmg;
+  const boost = attacker && hasEffect(attacker, 'attack_boost', wd.seconds) ? ABILITY_TUNING.attackDamageMultiplier : 1;
+  // damage() returns what actually landed (0 while the target is Invisible)
+  const dmg = damage(o, rollDamage(w.stats.damagePerHit, wd.rand, BALANCE) * mul * boost, wd.seconds);
+  if (dmg <= 0) return;
   // fx owner = the ATTACKER (screen shake scales with their weapon; commentary needs who hit whom)
   emitFx(wd.ctx, wd.r.code, 'hit', o.x, o.y, attacker?.player ?? o.player, dmg);
   // Knockback: initial speed whose per-tick decaying steps sum to exactly the knockback
@@ -189,13 +224,11 @@ function applyHit(wd: World, attackerId: string, o: FighterRow, from: { x: numbe
   const push = (knockbackDistance(w.spec) * (1 - decay)) / dt;
   const dx = o.x - from.x, dy = o.y - from.y, d = Math.hypot(dx, dy);
   const [ux, uy] = d > 1e-3 ? [dx / d, dy / d] : [Math.cos(fallbackDir), Math.sin(fallbackDir)];
-  const ofx = wd.effects.get(o.player.toHexString());
-  if (ofx) {
-    let vx = (ofx.kb?.[0] ?? 0) + ux * push, vy = (ofx.kb?.[1] ?? 0) + uy * push;
-    const sp = Math.hypot(vx, vy);
-    if (sp > KNOCKBACK.maxSpeed) { vx *= KNOCKBACK.maxSpeed / sp; vy *= KNOCKBACK.maxSpeed / sp; }
-    ofx.kb = [vx, vy];
-  }
+  const prev = getFx(o).kb;
+  let vx = (prev?.[0] ?? 0) + ux * push, vy = (prev?.[1] ?? 0) + uy * push;
+  const sp = Math.hypot(vx, vy);
+  if (sp > KNOCKBACK.maxSpeed) { vx *= KNOCKBACK.maxSpeed / sp; vy *= KNOCKBACK.maxSpeed / sp; }
+  patchFx(o, { kb: [vx, vy] });
   // TODO: other on_hit effects (burn, slow, chain, lifesteal, pierce).
 }
 
@@ -206,12 +239,16 @@ function resolveAttack(wd: World, f: FighterRow, facing: number) {
   const a = w.spec.archetype;
   if (a === 'shoot') return fireShots(wd, f, w, facing);
   if (a === 'throw') return throwWeapon(wd, f, w, facing);
-  const shape = meleeShape(a, f, facing, w.stats);
+  // Weapon boost: longer reach (the screen scales the weapon sprite to match)
+  const reachMul = hasEffect(f, 'weapon_boost', wd.seconds) ? ABILITY_TUNING.weaponScale : 1;
+  const stats = reachMul === 1 ? w.stats : { ...w.stats, rangeUnits: w.stats.rangeUnits * reachMul };
+  const shape = meleeShape(a, f, facing, stats);
   if (!shape) return;
   if (a === 'slam' && shape.kind === 'circle') emitFx(wd.ctx, wd.r.code, 'shockwave', shape.center.x, shape.center.y, f.player, shape.radius);
   for (const o of wd.fighters.values()) {
     if (o.player.isEqual(f.player) || o.hp <= 0) continue;
-    if (contains(shape, o, GAME.hitRadius)) applyHit(wd, id, o, a === 'slam' && shape.kind === 'circle' ? shape.center : f, facing);
+    // body size comes from hitRadius() so Shrink makes you harder to hit
+    if (contains(shape, o, hitRadius(o, wd.seconds))) applyHit(wd, id, o, a === 'slam' && shape.kind === 'circle' ? shape.center : f, facing);
   }
 }
 
@@ -302,7 +339,7 @@ function stepProjectiles(wd: World, dt: number, mx: number, my: number) {
       for (const o of wd.fighters.values()) {
         const oid = o.player.toHexString();
         if (oid === ownerId || o.hp <= 0 || meta.hit.includes(oid)) continue;
-        if (Math.hypot(o.x - x, o.y - y) > meta.r + GAME.hitRadius) continue;
+        if (Math.hypot(o.x - x, o.y - y) > meta.r + hitRadius(o, wd.seconds)) continue;
         const legMul = meta.k === 'throw' ? (meta.leg === 1 ? PROJECTILE.throwBackMul : PROJECTILE.throwOutMul) : 1;
         applyHit(wd, ownerId, o, { x: x - vx * dt, y: y - vy * dt }, Math.atan2(vy, vx), legMul);
         meta.hit.push(oid);
@@ -327,7 +364,7 @@ function stepProjectiles(wd: World, dt: number, mx: number, my: number) {
       emitFx(ctx, wd.r.code, 'shockwave', x, y, p.owner, radius);
       for (const o of wd.fighters.values()) {
         if (o.player.toHexString() === ownerId || o.hp <= 0) continue;
-        if (Math.hypot(o.x - x, o.y - y) <= radius + GAME.hitRadius) applyHit(wd, ownerId, o, { x, y }, Math.atan2(vy, vx));
+        if (Math.hypot(o.x - x, o.y - y) <= radius + hitRadius(o, wd.seconds)) applyHit(wd, ownerId, o, { x, y }, Math.atan2(vy, vx));
       }
     }
 

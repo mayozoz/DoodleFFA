@@ -77,6 +77,7 @@ export async function mount(el: HTMLElement) {
       `SELECT * FROM doodle WHERE room_code = '${code}'`,
       `SELECT * FROM weapon WHERE room_code = '${code}'`,
       `SELECT * FROM fighter WHERE room_code = '${code}'`,
+      `SELECT * FROM ability_object WHERE room_code = '${code}'`,
       `SELECT * FROM projectile WHERE room_code = '${code}'`,
       `SELECT * FROM fx_event WHERE room_code = '${code}'`,
     ]);

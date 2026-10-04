@@ -15,3 +15,5 @@ export * from './procedures/gen_sprite';
 export * from './procedures/gen_sfx';
 export * from './procedures/gen_commentary';
 export * from './procedures/gen_announcement';
+
+export * from './reducers/abilities';

@@ -9,3 +9,4 @@ export * from './fallback';
 export * from './arena';
 export * from './timing';
 export * from './attack';
+export * from './abilities';

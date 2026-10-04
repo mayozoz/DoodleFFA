@@ -1,4 +1,5 @@
 import { schema, table, t } from 'spacetimedb/server';
+import { Timestamp } from 'spacetimedb';
 
 // Table definitions. Column names are camelCase here; SpacetimeDB's default case
 // policy exposes them as snake_case in SQL (e.g. `room_code`) and camelCase in the
@@ -42,6 +43,8 @@ export const player = table(
     dropY: t.f32(),
     /** 1 = winner, 0 = not placed yet */
     placement: t.u8(),
+    // defaults let existing databases migrate in place (columns added after first publish)
+    abilityId: t.string().default('flash'),
   },
 );
 
@@ -97,8 +100,20 @@ export const fighter = table(
     lastAttackAt: t.timestamp(),
     /** JSON { burn?: {dps, until}, slow?: {...}, ... } */
     effects: t.string(),
+    abilityId: t.string().default('flash'),
+    abilityCharges: t.u8().default(2),
+    abilityReadyAt: t.timestamp().default(Timestamp.UNIX_EPOCH),
   },
 );
+
+/** Persistent ability zones, traps and projectiles; payload is owned by @doodle/spec. */
+export const abilityObject = table({ name: 'ability_object', public: true }, {
+  id: t.u64().primaryKey().autoInc(),
+  roomCode: t.string().index('btree'),
+  owner: t.identity(),
+  x: t.f32(), y: t.f32(),
+  data: t.string(),
+});
 
 /** Private cache: a controller requests only its own spoken weapon name. */
 export const weaponVoice = table(
@@ -122,6 +137,7 @@ export const input = table(
     dx: t.f32(),
     dy: t.f32(),
     attackBuffered: t.bool(),
+    abilityBuffered: t.bool().default(false),
   },
 );
 
@@ -210,6 +226,6 @@ export const admin = table(
 );
 
 const spacetimedb = schema({
-  room, player, drawing, doodle, weapon, weaponVoice, fighter, input, projectile, fxEvent, debugEvent, commentary, tickSchedule, secrets, admin,
+  room, player, drawing, doodle, weapon, weaponVoice, fighter, input, projectile, abilityObject, fxEvent, debugEvent, commentary, tickSchedule, secrets, admin,
 });
 export default spacetimedb;

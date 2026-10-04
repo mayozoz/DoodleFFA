@@ -1,11 +1,15 @@
-import { Application, Container, Graphics, Sprite, Texture } from 'pixi.js';
+import { Timestamp } from 'spacetimedb';
+import { Application, ColorMatrixFilter, Container, Graphics, Sprite, Texture, type Filter } from 'pixi.js';
 import {
   ARCHETYPE_MODULES, Character, Character3D, Feedback, Interpolator, STAGE, Stage3D, StageGrid, Tweener,
   createWeaponSprite, drawMarker, ease, loadCharacterAsset, loadCutout, motionFeel, type CharacterAsset,
 } from '@doodle/engine';
-import { DEFAULT_SWING, MAX_HP, arenaExtents, colorForSlot, type Marker, type Phase, type ProjectileMeta, type StoredWeapon } from '@doodle/spec';
+import {
+  ABILITY_TUNING, DEFAULT_SWING, MAX_HP, arenaExtents, colorForSlot, isAbilityId,
+  type AbilityObjectData, type FighterEffects, type Marker, type Phase, type ProjectileMeta, type StoredWeapon,
+} from '@doodle/spec';
 import { PROJECTILE } from '../../../../server/src/balance';
-import { serverNowMs } from '../../net/clock';
+import { secondsLeft, serverNowMs } from '../../net/clock';
 import type { DbConnection } from '../../module_bindings';
 import { hexToNum } from '../../ui/theme';
 
@@ -28,9 +32,14 @@ interface FighterView {
   stored: StoredWeapon;
   /** set once HP hits 0; the avatar + weapon fade out and stay hidden for the rest of the round */
   dead: boolean;
+  effects: FighterEffects;
+  grayscale: ColorMatrixFilter;
 }
 
 const DEATH_FADE_S = 0.9;
+
+/** Each weapon sprite's own filters (e.g. raw-doodle outline/glow), so status tints can stack on top. */
+const baseFilters = new WeakMap<Sprite, Filter[]>();
 
 /** One rendered projectile row: a glowing shot, or the owner's weapon flying (throw). */
 interface ProjectileView {
@@ -61,6 +70,10 @@ export class Arena {
   private fx = new Container();
   private shots = new Container();
   private projectiles = new Map<bigint, ProjectileView>();
+  private abilityGraphics = new Graphics();
+  private projectileSprites = new Map<bigint, Sprite>();
+  private blind = new Graphics();
+  private blindUntil = new Timestamp(0n);
   private numbers = new Container();
   private tweener = new Tweener();
   private feedback: Feedback;
@@ -76,11 +89,11 @@ export class Arena {
     private stage3d: Stage3D | null,
     private asset: CharacterAsset | null,
   ) {
-    this.ground.addChild(this.edge, this.storm, this.markers);
+    this.ground.addChild(this.edge, this.storm, this.markers, this.abilityGraphics);
     if (stage3d) this.ground.scale.y = Stage3D.groundScaleY;
     else this.world.addChild(this.grid.view);
     this.world.addChild(this.ground, this.actors, this.shots, this.fx, this.numbers);
-    app.stage.addChild(this.world);
+    app.stage.addChild(this.world, this.blind);
     this.feedback = new Feedback(this.world, this.tweener, this.numbers);
     app.ticker.add((t) => this.frame(t.deltaMS / 1000));
     this.wire();
@@ -130,6 +143,7 @@ export class Arena {
       if (!v) return;
       v.interp.push(f.x, f.y, f.facing);
       v.char.setHp(f.hp / MAX_HP);
+      v.effects = JSON.parse(f.effects);
       if (f.hp <= 0) this.killFighter(v);
       if (f.lastAttackAt.microsSinceUnixEpoch !== v.lastAttack) {
         v.lastAttack = f.lastAttackAt.microsSinceUnixEpoch;
@@ -141,6 +155,13 @@ export class Arena {
     c.db.fxEvent.onInsert((_e, ev) => {
       if (!mine(ev.roomCode)) return;
       const { x, y } = this.toScreen(ev.x, ev.y, 1.2);
+      if (ev.type === 'blind') this.blindUntil = new Timestamp(ev.createdAt.microsSinceUnixEpoch + BigInt(Math.round(ev.value * 1e6)));
+      if (isAbilityId(ev.type)) {
+        const cue = new Graphics().circle(0, 0, this.unit * 0.7).stroke({ color: 0xffdd66, width: 3 });
+        cue.position.set(x, y); this.fx.addChild(cue);
+        void this.tweener.to(0.4, t => { cue.alpha = 1 - t; cue.scale.set(1 + t); }).then(() => cue.destroy());
+        // The persistent zones below communicate ability range and duration.
+      }
       if (ev.type === 'hit') {
         const attacker = this.fighters.get(ev.owner.toHexString());
         const weight = attacker?.stored.spec.motion.weight ?? 0.5;
@@ -187,10 +208,12 @@ export class Arena {
       body3d = new Character3D(this.asset, tint);
       this.stage3d.scene.add(body3d.root);
     }
-    const v: FighterView = { char, body3d, last: null, weapon: null, interp: new Interpolator(), lastAttack: 0n, stored: PLACEHOLDER, dead: false };
+    const v: FighterView = { char, body3d, last: null, weapon: null, interp: new Interpolator(), lastAttack: 0n, stored: PLACEHOLDER, dead: false, effects: {}, grayscale: new ColorMatrixFilter() };
+    v.grayscale.desaturate();
     this.fighters.set(hex, v);
-    // Joined mid-battle (e.g. screen reload): someone already out shouldn't pop back in.
     const row = [...this.conn.db.fighter.iter()].find((f) => f.player.toHexString() === hex);
+    if (row) { v.interp.push(row.x, row.y, row.facing); v.effects = JSON.parse(row.effects); char.setHp(row.hp / MAX_HP); }
+    // Joined mid-battle (e.g. screen reload): someone already out shouldn't pop back in.
     if (row && row.hp <= 0) this.killFighter(v, true);
     await this.refreshWeapon(hex);
   }
@@ -210,6 +233,7 @@ export class Arena {
 
     v.weapon?.destroy();
     v.weapon = createWeaponSprite(tex, v.stored, this.unit, raw);
+    baseFilters.set(v.weapon, v.weapon.filters ? [...v.weapon.filters] : []);
     v.char.hand.addChild(v.weapon);
   }
 
@@ -382,10 +406,39 @@ export class Arena {
     }
 
     this.drawDropMarkers();
+    this.drawAbilities(dt);
+    this.blind.clear();
+    if (this.phase === 'battle' && secondsLeft(this.blindUntil) > 0)
+      this.blind.rect(0, 0, this.app.screen.width, this.app.screen.height).fill(0xffffff);
 
-    for (const v of this.fighters.values()) {
+    for (const [hex, v] of this.fighters) {
       const s = v.interp.sample();
       if (!s) continue;
+      const live = (key: keyof FighterEffects) => {
+        const effect = v.effects[key];
+        return !!effect && secondsLeft(new Timestamp(BigInt(Math.round(effect.until * 1e6)))) > 0;
+      };
+      const scale = live('shrink') ? ABILITY_TUNING.shrinkScale : 1;
+      const immunity = live('invisible');
+      v.body3d?.setAppearance(scale, immunity, live('frozen'));
+      for (const part of [v.char.body, v.char.head, v.char.ring]) {
+        part.scale.set(v.body3d ? 1 : scale);
+        part.filters = immunity ? [v.grayscale] : [];
+        part.alpha = immunity ? 0.65 : 1;
+      }
+      if (!v.body3d) v.char.hand.x = v.char.unit * 0.4 * scale;
+      // Hand is empty while the weapon is flying: the Boomerang ability OR a throw-archetype attack.
+      const thrown = [...this.conn.db.abilityObject.iter()].some(o => o.roomCode === this.code && o.owner.toHexString() === hex && (JSON.parse(o.data) as AbilityObjectData).kind === 'boomerang')
+        || [...this.projectiles.values()].some((p) => p.owner === hex && p.meta.k === 'throw');
+      if (v.weapon) {
+        v.weapon.visible = !thrown;
+        // keep the weapon's own filters (raw-doodle outline + glow); add grayscale while invisible
+        const base = baseFilters.get(v.weapon) ?? [];
+        v.weapon.filters = immunity ? [...base, v.grayscale] : base;
+        v.weapon.alpha = immunity ? 0.65 : 1;
+      }
+      // Scale the hand container so attack animation retains ownership of sprite scale.
+      v.char.hand.scale.set(live('weapon_boost') ? ABILITY_TUNING.weaponScale : 1);
       const moved = v.last ? Math.hypot(s.x - v.last.x, s.y - v.last.y) : 0;
       v.last = { x: s.x, y: s.y };
       const speed = Math.min(1, moved / Math.max(1e-3, dt * MOVE_SPEED));
@@ -407,6 +460,47 @@ export class Arena {
     this.drawProjectiles(simDt);
     this.stage3d?.render();
     // TODO: attach vfx emitters per weapon (vfx/index.ts).
+  }
+
+  private drawAbilities(dt: number) {
+    const g = this.abilityGraphics.clear();
+    const active = new Set<bigint>();
+    if (this.phase === 'battle') for (const row of this.conn.db.abilityObject.iter()) {
+      if (row.roomCode !== this.code) continue;
+      const d = JSON.parse(row.data) as AbilityObjectData;
+      if (secondsLeft(new Timestamp(BigInt(Math.round(d.until * 1e6)))) <= 0) continue;
+      const x = row.x * this.unit, y = row.y * this.unit, radius = d.radius * this.unit;
+      const pending = secondsLeft(new Timestamp(BigInt(Math.round(d.start * 1e6)))) > 0;
+      if (d.kind === 'blind') {
+        this.blindUntil = new Timestamp(BigInt(Math.round(d.until * 1e6)));
+        continue;
+      }
+      if (d.kind === 'freeze') g.rect(x - radius, y - radius, radius * 2, radius * 2).fill({ color: 0x88ddff, alpha: 0.4 });
+      else if (d.kind === 'wall') g.rect(x - radius, y - radius, radius * 2, radius * 2).stroke({ color: 0x66ccff, width: 7 });
+      else if (d.kind === 'ring') g.circle(x, y, radius).stroke({ color: 0xff6600, width: this.unit * 0.7, alpha: 0.7 });
+      else if (d.kind === 'boomerang') {
+        active.add(row.id);
+        let sprite = this.projectileSprites.get(row.id);
+        const owner = this.fighters.get(row.owner.toHexString());
+        if (!sprite && owner?.weapon) {
+          sprite = new Sprite(owner.weapon.texture); sprite.anchor.set(0.5);
+          sprite.width = owner.weapon.width; sprite.height = owner.weapon.height;
+          this.fx.addChild(sprite); this.projectileSprites.set(row.id, sprite);
+        }
+        if (sprite) {
+          const p = this.toScreen(row.x, row.y, 1);
+          sprite.position.set(p.x, p.y); sprite.rotation += dt * 12;
+        } else g.circle(x, y, radius).fill(0xffffff);
+      } else {
+        const color = d.kind === 'smoke' ? 0xaaaaaa : d.kind === 'mushroom' ? 0xaa44dd : d.kind === 'drain' ? 0x44ff88 : d.kind === 'hook' ? 0xdddddd : d.kind === 'silence' ? 0x4488ff : 0xff6600;
+        if (d.kind === 'hook') {
+          const owner = this.fighters.get(row.owner.toHexString())?.last;
+          if (owner) g.moveTo(owner.x * this.unit, owner.y * this.unit).lineTo(x, y).stroke({ color, width: 2 });
+        }
+        g.circle(x, y, radius).fill({ color, alpha: pending ? 0.12 : d.kind === 'smoke' ? 0.8 : 0.45 }).stroke({ color, width: 2 });
+      }
+    }
+    for (const [id, sprite] of this.projectileSprites) if (!active.has(id)) { sprite.destroy(); this.projectileSprites.delete(id); }
   }
 
   private drawDropMarkers() {

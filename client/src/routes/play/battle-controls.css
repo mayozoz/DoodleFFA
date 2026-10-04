@@ -23,3 +23,8 @@
 .battle-hear { position: absolute; top: max(36px, calc(env(safe-area-inset-top) + 28px)); right: max(12px, env(safe-area-inset-right));
   z-index: 1; padding: 6px 12px; border-radius: 999px; border: 1px solid #ffffff66; background: #ffffff10; color: #fff;
   font-size: 13px; font-weight: 700; }
+.battle-attack-zone { gap: 12px; }
+/* Special ability: outline pill under the sword, same minimal language as the attack button */
+.battle-special { padding: 8px 14px; border-radius: 999px; border: 1.5px solid #ffffffb3; background: #ffffff08;
+  color: #fff; font-size: 14px; font-weight: 800; max-width: 46vw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.battle-special:disabled { opacity: .5; }

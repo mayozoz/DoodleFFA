@@ -12,7 +12,7 @@ export const setInput = spacetimedb.reducer(
     if (len > 1) { dx /= len; dy /= len; }
     const row = ctx.db.input.player.find(ctx.sender);
     if (row) ctx.db.input.player.update({ ...row, dx, dy });
-    else ctx.db.input.insert({ player: ctx.sender, dx, dy, attackBuffered: false });
+    else ctx.db.input.insert({ player: ctx.sender, dx, dy, attackBuffered: false, abilityBuffered: false });
   },
 );
 
@@ -20,5 +20,5 @@ export const setInput = spacetimedb.reducer(
 export const pressAttack = spacetimedb.reducer((ctx) => {
   const row = ctx.db.input.player.find(ctx.sender);
   if (row) ctx.db.input.player.update({ ...row, attackBuffered: true });
-  else ctx.db.input.insert({ player: ctx.sender, dx: 0, dy: 0, attackBuffered: true });
+  else ctx.db.input.insert({ player: ctx.sender, dx: 0, dy: 0, attackBuffered: true, abilityBuffered: false });
 });
