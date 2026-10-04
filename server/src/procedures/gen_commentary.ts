@@ -15,19 +15,20 @@ import type { PCtx } from './common';
  */
 const KINDS = ['weapon', 'color', 'ko', 'final', 'winner'] as const;
 type Kind = (typeof KINDS)[number];
-const EMPTY = new Uint8Array();
+const EMPTY = { text: '', audio: new Uint8Array() };
 
 /** Words that would break "the middle is invisible" — drop the line if the model says them. */
 const FORBIDDEN = /\b(ai|a\.i\.|generated|generate|prompt|model|hp|damage|percent|stats?)\b|\d/i;
 
 /**
  * One announcer line for the shared screen: snapshot → ASI:One writes it → ElevenLabs speaks it.
- * Returns MP3 bytes (empty = nothing to play). Host-only, throttled per room, never throws.
+ * Returns the line's text (for on-screen captions) and its MP3 bytes (empty = nothing to play).
+ * Host-only, throttled per room, never throws.
  * `a`/`b` are optional player identities (hex) to focus on, e.g. killer/victim for a KO.
  */
 export const genCommentary = spacetimedb.procedure(
   { kind: t.string(), a: t.string(), b: t.string() },
-  t.byteArray(),
+  t.object('CommentaryLine', { text: t.string(), audio: t.byteArray() }),
   (ctx, { kind, a, b }) => {
     if (!COMMENTARY.enabled || !(KINDS as readonly string[]).includes(kind)) return EMPTY;
     const job = load(ctx, kind as Kind, a, b);
@@ -35,7 +36,7 @@ export const genCommentary = spacetimedb.procedure(
     try {
       const line = kind === 'weapon' ? job.weaponLine : writeLine(ctx, job.asiKey, job.snapshot);
       if (!line) return EMPTY;
-      return speak(ctx, job.elevenKey, line);
+      return { text: line, audio: speak(ctx, job.elevenKey, line) };
     } catch (e) {
       console.warn(`[commentary] ${kind} failed: ${e instanceof Error ? e.message : String(e)}`);
       return EMPTY;

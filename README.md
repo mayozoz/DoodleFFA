@@ -81,6 +81,8 @@ You can play in desktop browser tabs while developing. `/screen` and `/play` kee
 
 ### After changing the server
 
+> **Check which server the CLI targets.** The `stdb:*` scripts (except `stdb:publish:cloud`) use the `spacetime` CLI's *default* server. Run `spacetime server list`: if `maincloud` is marked default, `pnpm stdb:publish` publishes to Maincloud and spends credits. To target a local server explicitly, pass `-s`, for example `spacetime publish -s http://127.0.0.1:3010 --module-path server doodle-arena` (match `STDB_LOCAL_URL`), or run `spacetime server set-default local`.
+
 ```bash
 pnpm stdb:publish          # migrates in place when the schema change is compatible
 pnpm stdb:publish:clean    # --delete-data: wipe and re-run init (needed for most table changes)
@@ -96,15 +98,40 @@ pnpm stdb:publish:cloud    # spacetime publish -s maincloud --module-path server
 ```
 Then set `VITE_STDB_URI=wss://maincloud.spacetimedb.com` in `.env`.
 
+> **Idle cost:** `init` starts one global 20 Hz `tick` that runs even when no room is active (about 1.7M calls a day). Pause it when no room is active before leaving the module on Maincloud.
+
+### Website: doodleffa.tech (S3 + CloudFront)
+
+The client is a static Vite build. It is served from a private S3 bucket through CloudFront at `https://doodleffa.tech` (and `www.`). One-time AWS setup:
+
+1. **Route 53** hosted zone for `doodleffa.tech`; the registrar's nameservers point at its 4 `awsdns` NS values. Route 53 is needed because a bare domain can't CNAME to CloudFront.
+2. **ACM certificate** for `doodleffa.tech` + `www.doodleffa.tech`, requested in **us-east-1** (CloudFront only uses that region), validated through DNS ("Create records in Route 53").
+3. **S3 bucket**, all public access blocked, no static-website hosting.
+4. **CloudFront distribution**: origin = the bucket's REST endpoint with **Origin Access Control** (paste the generated bucket policy into the bucket), redirect HTTP to HTTPS, default root object `index.html`, alternate domain names + the ACM certificate. **Error pages:** 403 and 404 → `/index.html` with response code **200**, so `/play?room=…`, `/screen` and `/dev/weapons` reach the client router.
+5. **Route 53 alias records** (A and AAAA) for the bare domain and `www`, pointing at the distribution.
+
+Build and upload (needs a working `aws` CLI):
+
+```bash
+# .env: VITE_STDB_URI=wss://maincloud.spacetimedb.com  VITE_STDB_DB=doodle-arena  VITE_PUBLIC_URL=https://doodleffa.tech
+pnpm --filter @doodle/client build
+aws s3 sync client/dist s3://<bucket> --delete --exclude index.html \
+  --cache-control "public,max-age=31536000,immutable"     # hashed assets
+aws s3 cp client/dist/index.html s3://<bucket>/index.html --cache-control "no-cache"
+```
+
+The game server must already be on Maincloud. Deploy server and client together when a procedure's return type changes (for example `genCommentary`), since old clients can't decode the new shape.
+
 ---
 
 ## Environment variables
 
 | Var | Used by | Notes |
 |---|---|---|
-| `VITE_STDB_URI` | client | `ws://localhost:3000` locally, `wss://maincloud.spacetimedb.com` in prod |
+| `VITE_STDB_URI` | client (prod builds) | `wss://maincloud.spacetimedb.com` in prod; dev uses the Vite proxy instead |
 | `VITE_STDB_DB` | client, scripts | database name, default `doodle-arena` |
-| `VITE_PUBLIC_URL` | client (`/screen`) | base URL in the QR code; your LAN IP in dev |
+| `VITE_PUBLIC_URL` | client (`/screen`, prod builds) | base URL in the QR code: `https://doodleffa.tech`. Dev discovers the LAN address itself |
+| `STDB_LOCAL_URL` | Vite dev proxy | local SpacetimeDB that `/v1` is forwarded to (default `http://127.0.0.1:3000`) |
 | `ASI_ONE_API_KEY`, `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`, `AWS_*`, `S3_BUCKET`, `ASSET_BASE_URL` | **server, via the `secrets` table** | the module doesn't read these from env; load them with `set-secrets` |
 
 Only `VITE_*` variables reach the browser. **Never put an API key in a `VITE_` variable.**
@@ -114,8 +141,9 @@ Only `VITE_*` variables reach the browser. **Never put an API key in a `VITE_` v
 API keys live in the private `secrets` table. Only `set_secret` can write it, and only the admin identity may call `set_secret`. The admin is whoever published the module; `init` records them.
 
 ```bash
-pnpm tsx scripts/set-secrets.ts             # local
-pnpm tsx scripts/set-secrets.ts maincloud   # Maincloud
+pnpm tsx scripts/set-secrets.ts http://127.0.0.1:3010   # local (pass the server explicitly)
+pnpm tsx scripts/set-secrets.ts maincloud               # Maincloud
+pnpm tsx scripts/set-secrets.ts                         # the CLI's default server
 # or a single key:
 spacetime call doodle-arena set_secret '"ASI_ONE_API_KEY"' '"…"'
 ```
@@ -257,8 +285,9 @@ A voiced announcer on the shared screen that riffs on players' names and their w
 - **Server** (`server/src/procedures/gen_commentary.ts`), `genCommentary({ kind, a, b })`:
   - Host-only. It builds a snapshot of player names, weapon names, types, effects, and a condition *word* (fresh / bruised / hanging on / knocked out, never a number).
   - ASI:One `asi1-mini` writes one line from `server/src/prompts/commentary.v1.ts`, and ElevenLabs `eleven_flash_v2_5` speaks it with the "Adam" voice.
-  - It returns the **MP3 bytes directly**, so no S3 is needed. Measured about 1.2–1.3 s from request to audio.
-  - Kinds: `intro`, `color`, `ko` (a = killer, b = victim), `final`, `winner` (a = winner).
+  - It returns a `CommentaryLine { text, audio }`: the spoken line (for captions) and its **MP3 bytes directly**, so no S3 is needed. Empty `audio` means nothing to play. Measured about 1.2–1.3 s from request to audio.
+  - Reveal intros (`weapon` kind) are just `"<player>'s <weapon>!"` spoken as-is, with no LLM call and outside the per-round budget.
+  - Kinds: `weapon` (a = player), `color`, `ko` (a = killer, b = victim), `final`, `winner` (a = winner).
 - **Guardrails:**
   - PG.
   - Player and weapon names are passed as data, and the prompt tells the model to ignore instructions inside them.
@@ -269,6 +298,7 @@ A voiced announcer on the shared screen that riffs on players' names and their w
   - **Triggers:** intro when Reveal starts; play-by-play every ~7 s of silence in battle; a KO line naming the killer (the last hitter near the victim) and the victim; "final two"; the winner at results.
   - Big moments jump the queue, one line plays at a time, and stale KO lines are dropped.
   - A **mute toggle** sits top-left (remembered per device). When muted, the screen doesn't request lines at all, so it costs nothing.
+  - **Captions** sit bottom-left: white text on a faint dark box, at most a third of the screen wide (420px cap). Each line shows while it plays, lingers 0.6 s, then fades. They clear on mute and when a new round starts. A muted screen shows no captions, since it requests no lines.
   - Browser audio is unlocked by the host's Start click. After a screen reload, click the toggle once.
 - **Measured:** about 6 lines in a 4-player round, roughly 100 characters each, so about 600 ElevenLabs characters plus a few hundred LLM tokens per round.
 - **Voice:** `COMMENTARY.voiceId` (Adam, `pNInz6obpgDQGcFmaJgB`). Swap it any time.

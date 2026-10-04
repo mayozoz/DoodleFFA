@@ -1,6 +1,7 @@
 import { revealSeconds, revealSlot, type Phase } from '@doodle/spec';
 import { secondsLeft } from '../../net/clock';
 import type { DbConnection } from '../../module_bindings';
+import type { CommentaryLine } from '../../module_bindings/types';
 import { debug } from '../../debug';
 
 // Shared-screen announcer.
@@ -39,11 +40,32 @@ export function mountCommentator(conn: DbConnection, code: string): { setPhase(p
   btn.onclick = () => {
     muted = !muted;
     try { localStorage.setItem(MUTE_KEY, muted ? '1' : '0'); } catch { /* ignore */ }
-    if (muted) audio?.pause();
+    if (muted) { audio?.pause(); showCaption(''); }
     label();
   };
   label();
   document.body.appendChild(btn);
+
+  // ── captions (bottom-left): the line being spoken, shown only while it plays ──
+  const caption = document.createElement('div');
+  Object.assign(caption.style, {
+    position: 'fixed', left: '12px', bottom: '12px', zIndex: '60', maxWidth: 'min(34vw, 420px)', padding: '6px 10px',
+    borderRadius: '8px', background: '#0008', color: '#fff', font: '600 15px/1.3 system-ui',
+    textShadow: '0 1px 2px #000', pointerEvents: 'none', opacity: '0', transition: 'opacity 200ms',
+  } satisfies Partial<CSSStyleDeclaration>);
+  caption.setAttribute('aria-live', 'polite');
+  document.body.appendChild(caption);
+  let captionTimer = 0;
+  const showCaption = (text: string) => {
+    window.clearTimeout(captionTimer);
+    caption.textContent = text;
+    caption.style.opacity = text ? '1' : '0';
+  };
+  /** keep the last words up briefly after the audio ends */
+  const hideCaption = () => {
+    window.clearTimeout(captionTimer);
+    captionTimer = window.setTimeout(() => showCaption(''), 600);
+  };
 
   const want = (kind: Kind, a = '', b = '') => {
     if (muted) return;
@@ -56,13 +78,14 @@ export function mountCommentator(conn: DbConnection, code: string): { setPhase(p
   const say = async (w: Want) => {
     busy = true;
     try {
-      const bytes = await debug.track(`commentary ${w.kind}`, conn.procedures.genCommentary({ kind: w.kind, a: w.a, b: w.b }));
+      const line = await debug.track(`commentary ${w.kind}`, conn.procedures.genCommentary({ kind: w.kind, a: w.a, b: w.b }));
       const late = Date.now() - w.at;
-      if (muted || !bytes.length || (w.kind === 'ko' && late > STALE_MS)) return;
-      const url = URL.createObjectURL(new Blob([bytes.slice()], { type: 'audio/mpeg' }));
+      if (muted || !line.audio.length || (w.kind === 'ko' && late > STALE_MS)) return;
+      const url = URL.createObjectURL(new Blob([line.audio.slice()], { type: 'audio/mpeg' }));
       audio = new Audio(url);
       audio.volume = 0.95;
       lastLineAt = Date.now();
+      showCaption(line.text);
       await new Promise<void>((resolve) => {
         audio!.onended = audio!.onerror = () => resolve();
         audio!.play().catch((e: unknown) => {
@@ -72,6 +95,7 @@ export function mountCommentator(conn: DbConnection, code: string): { setPhase(p
         });
       });
       URL.revokeObjectURL(url);
+      hideCaption();
     } catch (e) {
       debug.error('commentary', e);
     } finally {
@@ -118,7 +142,7 @@ export function mountCommentator(conn: DbConnection, code: string): { setPhase(p
       .sort((x, y) => players.get(x)!.colorSlot - players.get(y)!.colorSlot);
     const n = order.length;
     if (!n) return;
-    const clips: (Uint8Array | null)[] = order.map(() => null);
+    const clips: (CommentaryLine | null)[] = order.map(() => null);
     // fetch sequentially, in stage order, so the first clip is ready first
     void (async () => {
       for (let i = 0; i < n; i++) {
@@ -135,7 +159,7 @@ export function mountCommentator(conn: DbConnection, code: string): { setPhase(p
       const slot = revealSlot(total - secondsLeft(r.phaseEndsAt), n);
       if (slot.kind !== 'weapon' || slot.index <= played) return;
       const clip = clips[slot.index];
-      if (!clip?.length) {
+      if (!clip?.audio.length) {
         if (slot.progress > 0.5) played = slot.index; // arrived too late for this weapon: skip it
         return;
       }
@@ -145,13 +169,14 @@ export function mountCommentator(conn: DbConnection, code: string): { setPhase(p
   };
 
   /** Start a clip right away, cutting whatever is playing (keeps the intro in sync with the stage). */
-  const playNow = (bytes: Uint8Array) => {
+  const playNow = (line: CommentaryLine) => {
     audio?.pause();
-    const url = URL.createObjectURL(new Blob([bytes.slice()], { type: 'audio/mpeg' }));
+    const url = URL.createObjectURL(new Blob([line.audio.slice()], { type: 'audio/mpeg' }));
     audio = new Audio(url);
     audio.volume = 0.95;
-    audio.onended = () => URL.revokeObjectURL(url);
+    audio.onended = () => { URL.revokeObjectURL(url); hideCaption(); };
     lastLineAt = Date.now();
+    showCaption(line.text);
     audio.play().catch((e: unknown) => debug.error('commentary', `audio blocked: ${String(e)} — click the commentary button`));
   };
 
@@ -164,14 +189,16 @@ export function mountCommentator(conn: DbConnection, code: string): { setPhase(p
         const winner = conn.db.room.code.find(code)?.winner ?? '';
         want('winner', winner);
       }
-      if (p === 'draw' || p === 'lobby') { pending = null; audio?.pause(); }
+      if (p === 'draw' || p === 'lobby') { pending = null; audio?.pause(); showCaption(''); }
     },
     dispose() {
       clearInterval(color);
       window.clearInterval(introTimer);
       conn.db.fxEvent.removeOnInsert(onFx);
       audio?.pause();
+      window.clearTimeout(captionTimer);
       btn.remove();
+      caption.remove();
     },
   };
 }

@@ -149,14 +149,15 @@ MHacks 2026
 
 2.9 Audio: ElevenLabs
 - Text-to-speech (`eleven_flash_v2_5`, voice "Adam"):
-    - A sports-style commentator on the big screen.
+    - A sports-style commentator on the big screen, with white captions in the bottom-left corner
+      so the room can follow along even when it's loud.
     - Reads each weapon's name during Reveal ("Maya's Thunder Noodle!").
     - Each phone announces "your weapon is ..." to its own player.
 - Sound effects API: a one-second custom sound for each weapon, made from a sound description the
   AI writes for that weapon.
 - Music: the title-menu loop was made ahead of time with ElevenLabs (a static file, no live cost).
-- Connection: procedures call ElevenLabs -> audio bytes come back to the screen/phone -> they're
-  played in sync with the reveal timing.
+- Connection: procedures call ElevenLabs -> the line's text and audio bytes come back to the
+  screen/phone -> the audio plays in sync with the reveal timing while the caption shows.
 
 2.10 Hosting: AWS + SpacetimeDB Maincloud
 - Domain: doodleffa.tech (and www.doodleffa.tech). The QR code in the lobby links phones to
