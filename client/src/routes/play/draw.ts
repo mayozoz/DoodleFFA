@@ -1,3 +1,4 @@
+import './draw.css';
 import { extractFeatures, type Drawing, type Stroke } from '@doodle/spec';
 import { mountCountdown } from '../../ui/countdown';
 import { debug } from '../../debug';
@@ -16,7 +17,7 @@ export const drawView: View = (ctx) => {
       <canvas id="c" width="${SIZE}" height="${SIZE}"
         style="width:min(92vw,70dvh);aspect-ratio:1;background:#fff;border:6px solid var(--player);border-radius:16px;touch-action:none"></canvas>
       <div style="display:flex;gap:8px">
-        ${COLORS.map((c) => `<button data-c="${c}" style="background:${c};width:44px;height:44px;padding:0"></button>`).join('')}
+        ${COLORS.map((c, i) => `<button class="drawing-color" data-c="${c}" aria-label="${['Black', 'Red', 'Blue', 'Green'][i]} drawing color" aria-pressed="${i === 0}" style="background:${c};width:44px;height:44px;padding:0"></button>`).join('')}
         <button id="undo">↶</button>
       </div>
     </div>`;
@@ -57,7 +58,13 @@ export const drawView: View = (ctx) => {
     redraw();
   };
   canvas.onpointerup = () => { cur = null; };
-  ctx.el.querySelectorAll<HTMLButtonElement>('[data-c]').forEach((b) => (b.onclick = () => (color = b.dataset.c!)));
+  const colorButtons = ctx.el.querySelectorAll<HTMLButtonElement>('[data-c]');
+  colorButtons.forEach((button) => {
+    button.onclick = () => {
+      color = button.dataset.c!;
+      colorButtons.forEach((swatch) => swatch.setAttribute('aria-pressed', String(swatch === button)));
+    };
+  });
   ctx.el.querySelector<HTMLButtonElement>('#undo')!.onclick = () => { drawing.strokes.pop(); redraw(); };
   redraw();
 

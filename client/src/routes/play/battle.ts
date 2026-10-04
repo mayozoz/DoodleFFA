@@ -55,14 +55,19 @@ export const battleView: View = (ctx) => {
     void ctx.conn.reducers.setInput(want);
   }, 1000 / SEND_HZ);
 
-  // Every press: local bounce + click + haptic, even during cooldown. Server buffers one press.
+  // Every press: local bounce + click, even during cooldown. Server buffers one press.
   const btn = ctx.el.querySelector<HTMLButtonElement>('#atk')!;
   btn.onpointerdown = () => {
     btn.animate([{ scale: 1 }, { scale: 0.9 }, { scale: 1 }], { duration: 120 });
     click();
-    haptic(15);
     void ctx.conn.reducers.pressAttack({});
   };
+
+  // Damage feedback follows confirmed server HP changes, never attack presses.
+  const onDamage: Parameters<typeof ctx.conn.db.fighter.onUpdate>[0] = (_event, previous, current) => {
+    if (current.player.isEqual(ctx.identity) && current.hp < previous.hp) haptic(50);
+  };
+  ctx.conn.db.fighter.onUpdate(onDamage);
 
   // Cooldown ring + HP from our own fighter row.
   const ring = ctx.el.querySelector<SVGCircleElement>('#ring')!;
@@ -82,6 +87,7 @@ export const battleView: View = (ctx) => {
   loop();
 
   return () => {
+    ctx.conn.db.fighter.removeOnUpdate(onDamage);
     clearInterval(sender);
     cancelAnimationFrame(raf);
     stick.destroy();
