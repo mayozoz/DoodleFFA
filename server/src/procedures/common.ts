@@ -52,15 +52,18 @@ export function loadJob(ctx: PCtx, field: WeaponField): GenJob | null {
 }
 
 /**
- * Write one weapon field if it's still empty and the round hasn't moved past drop.
- * Anything arriving after Reveal starts is discarded — the fallback already won.
+ * Write one weapon field if it's still empty and it isn't too late:
+ *  - spec: only during draw/drop — Reveal applies fallbacks the moment it starts.
+ *  - sprite / sfx: also during Reveal (Drop can end after 5 s now; a 3–5 s sound or a slower
+ *    sprite still makes it into the showcase and the fight). Anything later is discarded.
  */
 export function writeIfStillPending(ctx: PCtx, field: WeaponField, value: string, markReady = false) {
   ctx.withTx((tx) => {
     const w = tx.db.weapon.player.find(ctx.sender);
     const p = tx.db.player.identity.find(ctx.sender);
     const r = p && tx.db.room.code.find(p.roomCode);
-    if (!w || !r || (r.phase !== 'draw' && r.phase !== 'drop') || w[field] !== '') return;
+    const open = field === 'spec' ? ['draw', 'drop'] : ['draw', 'drop', 'reveal'];
+    if (!w || !r || !open.includes(r.phase) || w[field] !== '') return;
     tx.db.weapon.player.update({ ...w, [field]: value, ...(markReady ? { status: 'ready' } : {}) });
   });
 }

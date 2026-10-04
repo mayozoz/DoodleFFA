@@ -16,6 +16,7 @@ export const MODELS = {
   specAsi1: 'asi1',
   /** gen_sprite: image-to-image ("Nano Banana 2"); the stable id, not -preview */
   sprite: 'gemini-3.1-flash-image',
+  announcement: 'eleven_flash_v2_5',
 } as const;
 
 export const ENDPOINTS = {
@@ -23,13 +24,16 @@ export const ENDPOINTS = {
   /** OpenAI-compatible chat completions */
   asi1: 'https://api.asi1.ai/v1/chat/completions',
   elevenSfx: 'https://api.elevenlabs.io/v1/sound-generation',
-  elevenTts: (voiceId: string) => `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}?output_format=mp3_44100_64`,
+  /** ElevenLabs text-to-speech (commentator + per-phone weapon announcement) */
+  elevenTts: (voiceId: string, format = 'mp3_44100_64') =>
+    `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceId)}?output_format=${format}`,
 } as const;
 
 export const TIMEOUT_MS = {
   spec: 12_000,
   sprite: 30_000,
   sfx: 30_000,
+  announcement: 12_000,
 } as const;
 
 /** Battle commentator (backlog — see README "Commentator"). Off until it's built. */
@@ -52,6 +56,7 @@ export const SECRET_KEYS = [
   'GEMINI_API_KEY',
   'ASI_ONE_API_KEY',
   'ELEVENLABS_API_KEY',
+  'ELEVENLABS_VOICE_ID',
   'AWS_ACCESS_KEY_ID',
   'AWS_SECRET_ACCESS_KEY',
   'AWS_REGION',

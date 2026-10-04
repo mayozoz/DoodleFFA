@@ -100,6 +100,20 @@ export const fighter = table(
   },
 );
 
+/** Private cache: a controller requests only its own spoken weapon name. */
+export const weaponVoice = table(
+  { name: 'weapon_voice' },
+  {
+    player: t.identity().primaryKey(),
+    roomCode: t.string(),
+    round: t.u32(),
+    name: t.string(),
+    audioUrl: t.string(),
+    status: t.string(), // pending | ready | failed
+    requestedAt: t.timestamp(),
+  },
+);
+
 /** Private: latest intent per controller. */
 export const input = table(
   { name: 'input' },
@@ -196,6 +210,6 @@ export const admin = table(
 );
 
 const spacetimedb = schema({
-  room, player, drawing, doodle, weapon, fighter, input, projectile, fxEvent, debugEvent, commentary, tickSchedule, secrets, admin,
+  room, player, drawing, doodle, weapon, weaponVoice, fighter, input, projectile, fxEvent, debugEvent, commentary, tickSchedule, secrets, admin,
 });
 export default spacetimedb;

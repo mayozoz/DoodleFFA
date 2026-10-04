@@ -12,6 +12,8 @@ import { waitingView } from './waiting';
 import { resultsView } from './results';
 import { revealView } from './reveal';
 import { mountPlayDebug } from './debug-status';
+import { enableAudio } from '../../audio/sfx';
+import { ControllerAudio } from './audio';
 
 // Controller (/play). Subscribes to its room, the room's players, and its own
 // fighter + weapon rows only, and
@@ -28,9 +30,11 @@ const VIEWS: Record<Phase, View> = {
 
 export async function mount(el: HTMLElement) {
   preventControllerZoom();
+  enableAudio();
   const { conn, identity } = await connect('play');
   const me = identity.toHexString();
   const ctx: PlayCtx = { conn, identity, el, roomCode: '' };
+  ctx.audio = new ControllerAudio(ctx);
   mountPlayDebug(ctx);
 
   let current: { phase: Phase; cleanup: () => void } | null = null;
@@ -47,6 +51,7 @@ export async function mount(el: HTMLElement) {
       .onApplied(() => {
         const r = conn.db.room.code.find(code);
         if (r) { syncFromPhaseStart(r.phaseStartedAt); show(r.phase as Phase); }
+        ctx.audio?.sync();
       })
       .subscribe([
         `SELECT * FROM room WHERE code = '${code}'`,

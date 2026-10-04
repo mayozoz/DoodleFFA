@@ -19,3 +19,7 @@
 .battle-sword-cooldown #ring { stroke-linecap: round; }
 /* Rotate prompt: see client/src/ui/rotate-hint.ts (non-blocking pill, shared with Reveal). */
 .battle-controls-shell #hp { pointer-events: none; }
+/* "Hear weapon" (replays your spoken weapon name): small outline pill, top-right, clear of the notch */
+.battle-hear { position: absolute; top: max(36px, calc(env(safe-area-inset-top) + 28px)); right: max(12px, env(safe-area-inset-right));
+  z-index: 1; padding: 6px 12px; border-radius: 999px; border: 1px solid #ffffff66; background: #ffffff10; color: #fff;
+  font-size: 13px; font-weight: 700; }

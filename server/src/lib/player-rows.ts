@@ -10,6 +10,7 @@ export function clearPlayerRoundRows(ctx: Ctx, id: Identity) {
   ctx.db.drawing.player.delete(id);
   ctx.db.doodle.player.delete(id);
   ctx.db.weapon.player.delete(id);
+  ctx.db.weaponVoice.player.delete(id);
   ctx.db.fighter.player.delete(id);
   ctx.db.input.player.delete(id);
 }

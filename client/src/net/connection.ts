@@ -17,15 +17,15 @@ export interface Connected {
  * phones keep their player row + color.
  */
 export function connect(role: 'screen' | 'play'): Promise<Connected> {
-  const tokenKey = `doodle.token.${role}`;
+  const tokenKey = `doodle.token.${role}:${URI}:${DB}`;
   let saved: string | undefined;
   try { saved = localStorage.getItem(tokenKey) ?? undefined; } catch { /* private mode */ }
 
   return new Promise((resolve, reject) => {
-    DbConnection.builder()
+    const attempt = (token: string | undefined, canRetry: boolean) => DbConnection.builder()
       .withUri(URI)
       .withDatabaseName(DB)
-      .withToken(saved)
+      .withToken(token)
       .onConnect((conn, identity, token) => {
         try { localStorage.setItem(tokenKey, token); } catch { /* ignore */ }
         if (DEBUG) {
@@ -34,11 +34,21 @@ export function connect(role: 'screen' | 'play'): Promise<Connected> {
         }
         resolve({ conn, identity });
       })
-      .onConnectError((_ctx, err) => { debug.error('connect', `${URI}: ${String(err)}`); reject(err); })
+      .onConnectError((_ctx, err) => {
+        // Tokens from local SpacetimeDB cannot authenticate against maincloud.
+        if (token && canRetry && /verify token|invalid token|expired token/i.test(String(err))) {
+          try { localStorage.removeItem(tokenKey); } catch { /* storage blocked */ }
+          attempt(undefined, false);
+          return;
+        }
+        debug.error('connect', `${URI}: ${String(err)}`);
+        reject(err);
+      })
       .onDisconnect((_ctx, err) => {
         console.warn('[stdb] disconnected');
         debug.error('connection', `disconnected${err ? `: ${String(err)}` : ''} — reload to reconnect`);
       })
       .build();
+    attempt(saved, true);
   });
 }

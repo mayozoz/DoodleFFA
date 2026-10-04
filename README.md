@@ -103,7 +103,7 @@ Then set `VITE_STDB_URI=wss://maincloud.spacetimedb.com` in `.env`.
 | `VITE_STDB_URI` | client | `ws://localhost:3000` locally, `wss://maincloud.spacetimedb.com` in prod |
 | `VITE_STDB_DB` | client, scripts | database name, default `doodle-arena` |
 | `VITE_PUBLIC_URL` | client (`/screen`) | base URL in the QR code; your LAN IP in dev |
-| `GEMINI_API_KEY`, `ASI_ONE_API_KEY`, `ELEVENLABS_API_KEY`, `AWS_*`, `S3_BUCKET`, `ASSET_BASE_URL` | **server, via the `secrets` table** | the module doesn't read these from env; load them with `set-secrets` |
+| `GEMINI_API_KEY`, `ASI_ONE_API_KEY`, `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`, `AWS_*`, `S3_BUCKET`, `ASSET_BASE_URL` | **server, via the `secrets` table** | the module doesn't read these from env; load them with `set-secrets` |
 
 Only `VITE_*` variables reach the browser. **Never put an API key in a `VITE_` variable.**
 
@@ -298,7 +298,7 @@ A voiced announcer on the shared screen that riffs on players' names and their w
 | spec | `server/src/lib/weapons.ts → applyFallbacks` | `fallbackSpecFromFeatures` (deterministic, seeded) |
 | empty drawing | same | `MYSTERY_STICK` |
 | sprite | `client/src/routes/screen/arena.ts → refreshWeapon` | raw doodle PNG + Outline/Glow filters |
-| sfx | `client/src/audio/sfx.ts` | `/sfx/<archetype>.mp3` |
+| sfx | `client/src/audio/sfx.ts` | `/sfx/<archetype>.wav` |
 
 **M1 switch:** `USE_HARDCODED_SWING = true` in `server/src/lib/weapons.ts` gives every weapon `DEFAULT_SWING`. On the client, `RUN_GENERATION = false` in `client/src/routes/play/draw.ts` keeps the procedures from being called. Flip both in M3.
 
@@ -352,6 +352,45 @@ Add a JSON file in `packages/spec/fixtures/` with the `weapon` object only. Add 
 | **M3** hidden AI layer | `extractFeatures` + tests, `secrets`/`set_secret`, procedures with idempotency gates, prompts v1, fallbacks wired at Reveal. **To do:** S3 SigV4, sprite background removal/orientation, confirm model IDs, flip the M1 switches |
 | **M4** feel/polish | Archetype/vfx stubs exist and currently fall back to swing / particle presets |
 | **M5** | Not started (voice vs. video still undecided) |
+
+### Weapon sound effects
+
+`RUN_SFX_GENERATION = true` in `client/src/routes/play/draw.ts` enables sound
+independently while `RUN_GENERATION = false` keeps spec/sprite generation off.
+When full generation is enabled, sound generation waits for the spec so it can
+use the weapon's custom `sfx_prompt`. Without a spec, it uses a generic swing
+prompt. The server calls ElevenLabs `/v1/sound-generation` with a one-second
+MP3 request and stores an inline `data:audio/mpeg;base64,...` in `weapon.sfxUrl`.
+This audio path requires no AWS credentials or S3 upload.
+
+Publish the updated server module and load `ELEVENLABS_API_KEY` into its private
+secrets table using `pnpm tsx scripts/set-secrets.ts` (append `maincloud` for cloud).
+Keys in `.env` alone are not loaded by the server. Each controller unlocks phone
+audio when the player taps Join, draws, or uses the controls. Each confirmed
+attack plays only that player’s weapon sound on their own phone. The shared
+screen plays no weapon sounds. Controller presses also play a local click.
+
+Fallback WAVs ship in `client/public/sfx`; they play if custom generation is
+unavailable, finishes after Reveal starts, or returns unusable audio.
+Use `/screen?debug` to see `gen_sfx` failures. Rebuild the original fallback
+assets with `python3 scripts/build-sfx.py`.
+
+
+### Personal weapon announcements
+
+During Reveal, each controller displays its weapon name and requests ElevenLabs
+speech saying “Your weapon is [name]!” on that phone. The Hear weapon button
+replays it (or retries if phone audio was locked). The same ELEVENLABS_API_KEY
+supports sound effects and speech. Optionally set ELEVENLABS_VOICE_ID in .env
+and rerun set-secrets to choose a voice; otherwise the default voice is used.
+
+The gen_announcement procedure reads the caller’s final weapon spec on the
+server and caches the MP3 in a private weapon_voice table for this round. It
+returns the audio only to that caller. Cached replays do not make another paid
+request. Late responses are discarded after the round changes, and announcements
+stop at Results. This works with fallback weapon names while spec generation is
+disabled, and with unique generated names when enabled. Republish the server after
+this change so the new procedure and private cache table are available.
 
 ---
 
