@@ -1,4 +1,4 @@
-import { Application, Container, Graphics, Texture } from 'pixi.js';
+import { Application, Container, Graphics, Sprite, Texture } from 'pixi.js';
 import {
   ARCHETYPE_MODULES, Character, Character3D, Feedback, ParticleSystem, STAGE, Stage3D, StageGrid, Tweener,
   createWeaponSprite, loadCharacterAsset, loadCutout, motionFeel, vfxParams, type CharacterAsset,
@@ -88,17 +88,75 @@ export async function mount(el: HTMLElement) {
     char.hand.addChild(sprite);
     renderPanel();
   };
+  const toWorld = (x: number, y: number, h = 0) =>
+    stage3d ? Stage3D.toScreen(x, y, h, unit) : { x: x * unit, y: (y - h * 0.5) * unit };
+
+  const hitDummy = (stats: StoredWeapon['stats']) => {
+    const f = motionFeel(spec.motion, spec.archetype);
+    feedback.hitStop(f.hitPauseMs);
+    feedback.shake(f.shake);
+    feedback.damageNumber(dummy.x, dummy.y - unit, stats.damagePerHit);
+    for (const [i, v] of spec.vfx.entries()) if (v.where === 'impact') particles.emit(dummy.x, dummy.y, 0, vfxParams(v, spec.palette, i), 12);
+  };
+
+  // Local stand-ins for what the server does in a real round (projectiles, throws, shockwaves).
+  const previewShot = (stats: StoredWeapon['stats']) => {
+    const p = spec.projectile ?? { count: 1, spread_deg: 0, speed: 0.6, behavior: 'pierce' as const };
+    const speed = 8 + 14 * p.speed, life = stats.rangeUnits / speed, spread = (p.spread_deg * Math.PI) / 180;
+    const fill = spec.palette[0] ? parseInt(spec.palette[0].slice(1), 16) : 0xfff3a0;
+    for (let i = 0; i < p.count; i++) {
+      const a = p.count > 1 ? spread * (i / (p.count - 1) - 0.5) : 0;
+      const orb = new Graphics().circle(0, 0, 0.3 * unit).fill(fill).stroke({ color: 0x2f9bff, width: 2 });
+      fxLayer.addChild(orb);
+      let hit = false;
+      void tweener.to(life, (t) => {
+        const d = stats.rangeUnits * t;
+        const arcH = p.behavior === 'arc' ? 0.6 + 4 * 2.2 * t * (1 - t) : 1;
+        const q = toWorld(Math.cos(a) * d, Math.sin(a) * d, arcH);
+        orb.position.set(q.x, q.y);
+        if (!hit && p.behavior !== 'arc' && Math.abs(Math.cos(a) * d - DUMMY.x) < 0.6 && Math.abs(Math.sin(a) * d) < 0.6) { hit = true; hitDummy(stats); }
+      }).then(() => { if (p.behavior === 'arc') { shock(Math.cos(a) * stats.rangeUnits, Math.sin(a) * stats.rangeUnits, 1.4); } orb.destroy(); });
+    }
+  };
+  const previewThrow = (stats: StoredWeapon['stats']) => {
+    const fly = new Sprite(sprite.texture);
+    fly.anchor.copyFrom(sprite.anchor); fly.scale.set(sprite.scale.x * 0.8);
+    if (sprite.filters) fly.filters = [...sprite.filters];
+    fxLayer.addChild(fly);
+    sprite.visible = false;
+    const out = stats.rangeUnits / 12;
+    let hitOut = false, hitBack = false;
+    void tweener.to(out * 2, (t) => {
+      const d = stats.rangeUnits * (t < 0.5 ? t * 2 : (1 - t) * 2);
+      const q = toWorld(d, -0.6 * Math.sin(t * Math.PI), 1);
+      fly.position.set(q.x, q.y); fly.rotation = t * 30;
+      if (Math.abs(d - DUMMY.x) < 0.7) { if (t < 0.5 && !hitOut) { hitOut = true; hitDummy(stats); } if (t >= 0.5 && !hitBack) { hitBack = true; hitDummy(stats); } }
+    }).then(() => { fly.destroy(); sprite.visible = !hideWeapon; });
+  };
+  const shock = (x: number, y: number, radius: number) => {
+    const g = new Graphics();
+    fxLayer.addChild(g);
+    const c = toWorld(x, y, 0), k = stage3d ? Stage3D.groundScaleY : 1;
+    void tweener.to(0.35, (t) => {
+      const r = radius * unit * (0.3 + 0.7 * t);
+      g.clear().ellipse(c.x, c.y, r, r * k).stroke({ color: 0xffffff, width: 6 * (1 - t), alpha: 1 - t });
+    }).then(() => g.destroy());
+  };
+
   const attack = () => {
     const stored = toStored(spec);
-    void body3d?.attack(spec.archetype, motionFeel(spec.motion), tweener);
+    const feel = motionFeel(spec.motion, spec.archetype);
+    void body3d?.attack(spec.archetype, feel, tweener);
     void ARCHETYPE_MODULES[spec.archetype].play(sprite, {
-      spec, stats: stored.stats, feel: motionFeel(spec.motion), tweener, unit, fxLayer, facing: 0,
+      spec, stats: stored.stats, feel, tweener, unit, fxLayer, facing: 0,
+      from: { x: 0, y: 0 }, project: toWorld,
       onStrike: () => {
-        const f = motionFeel(spec.motion);
-        feedback.hitStop(f.hitPauseMs);
-        feedback.shake(f.shake);
-        feedback.damageNumber(dummy.x, dummy.y - unit, stored.stats.damagePerHit);
-        for (const [i, v] of spec.vfx.entries()) if (v.where === 'impact') particles.emit(dummy.x, dummy.y, 0, vfxParams(v, spec.palette, i), 12);
+        const a = spec.archetype;
+        if (a === 'shoot') return previewShot(stored.stats);
+        if (a === 'throw') return previewThrow(stored.stats);
+        if (a === 'slam') shock(stored.stats.rangeUnits * 0.6, 0, stored.stats.areaUnits);
+        // melee: hit the dummy if it's inside this archetype's reach (rough local check)
+        if (a === 'spin' || DUMMY.x <= stored.stats.rangeUnits + 0.5) hitDummy(stored.stats);
       },
     });
   };

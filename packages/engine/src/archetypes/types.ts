@@ -18,6 +18,10 @@ export interface ArchetypeCtx {
   mini?: boolean;
   /** emitted at the frame the hit should land (VFX "impact" hooks) */
   onStrike?: () => void;
+  /** attacker's position in world units (for world-space fx like the beam) */
+  from?: { x: number; y: number };
+  /** world (x, y, height) → fxLayer coords. Without it, world-space fx are skipped. */
+  project?: (x: number, y: number, h?: number) => { x: number; y: number };
 }
 
 /**

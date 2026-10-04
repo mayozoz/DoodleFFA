@@ -17,7 +17,7 @@ export const genSpec = spacetimedb.procedure(t.unit(), (ctx) => {
   if (!job) return {};
   const provider = SPEC_PROVIDERS[SPEC_PROVIDER];
   const key = job.secrets[provider.secret];
-  if (!key) return {}; // no key → Reveal fallback
+  if (!key) { resetGenerating(ctx); return {}; } // no key → Reveal fallback
 
   const seed = job.seed ^ hashString(job.playerHex);
   const fallback = job.features ? fallbackSpecFromFeatures(job.features, seed) : MYSTERY_STICK;
@@ -36,6 +36,18 @@ export const genSpec = spacetimedb.procedure(t.unit(), (ctx) => {
     writeIfStillPending(ctx, 'spec', storeWeapon(spec), true);
   } catch (e) {
     logFail(ctx, job.roomCode, `gen_spec (${SPEC_PROVIDER})`, e);
+    // Failed: stop Drop waiting on it; the Reveal fallback takes over.
+    ctx.withTx((tx) => {
+      const w = tx.db.weapon.player.find(ctx.sender);
+      if (w?.status === 'generating') tx.db.weapon.player.update({ ...w, status: 'pending' });
+    });
   }
   return {};
 });
+
+function resetGenerating(ctx: Parameters<typeof loadJob>[0]) {
+  ctx.withTx((tx) => {
+    const w = tx.db.weapon.player.find(ctx.sender);
+    if (w?.status === 'generating') tx.db.weapon.player.update({ ...w, status: 'pending' });
+  });
+}

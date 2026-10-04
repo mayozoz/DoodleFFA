@@ -20,3 +20,11 @@ describe('knockbackDistance', () => {
     expect(knockbackDistance(spec({ vfx: [{ type: 'goo', where: 'impact', intensity: 1 }] }))).toBeGreaterThan(knockbackDistance(spec({ vfx: [] })));
   });
 });
+
+import { PROJECTILE } from '../src/balance';
+
+describe('boomerang budget', () => {
+  it('out + back legs together are worth at most one hit', () => {
+    expect(PROJECTILE.throwOutMul + PROJECTILE.throwBackMul).toBeLessThanOrEqual(1);
+  });
+});

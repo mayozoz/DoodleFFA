@@ -6,7 +6,11 @@ import type { WeaponSpec } from '@doodle/spec';
  * background, rotated so grip→tip points right, inside an element that plays the archetype's
  * test-swing animation around the grip.
  */
-export async function weaponArt(src: { spriteUrl?: string; png?: Uint8Array }, spec: WeaponSpec | null): Promise<HTMLElement> {
+export async function weaponArt(
+  src: { spriteUrl?: string; png?: Uint8Array },
+  spec: WeaponSpec | null,
+  opts: { orient?: boolean } = {},
+): Promise<HTMLElement> {
   const stage = document.createElement('div');
   stage.className = 'weapon-stage';
   const anim = document.createElement('div');
@@ -22,7 +26,8 @@ export async function weaponArt(src: { spriteUrl?: string; png?: Uint8Array }, s
     const angle = Math.atan2((ty - gy) * canvas.height, (tx - gx) * canvas.width);
     const origin = `${gx * 100}% ${gy * 100}%`;
     canvas.style.transformOrigin = origin;
-    canvas.style.transform = `rotate(${-angle}rad)`;
+    // orient = point grip→tip to the right (reveal cards); off = exactly as drawn (podium)
+    if (opts.orient !== false) canvas.style.transform = `rotate(${-angle}rad)`;
     anim.style.transformOrigin = origin;
     anim.appendChild(canvas);
   }

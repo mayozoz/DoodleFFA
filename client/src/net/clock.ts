@@ -10,6 +10,11 @@ export function syncFromPhaseStart(phaseStartedAt: Timestamp) {
   offsetMs = Date.now() - Number(phaseStartedAt.toMillis());
 }
 
+/** Estimated server clock, ms since epoch (display-only timing, e.g. projectile arcs). */
+export function serverNowMs(): number {
+  return Date.now() - offsetMs;
+}
+
 /** How long ago the phase should have ended (0 if it hasn't). Debug: detects a stalled server. */
 export function secondsOverdue(phaseEndsAt: Timestamp): number {
   return Math.max(0, (Date.now() - (Number(phaseEndsAt.toMillis()) + offsetMs)) / 1000);

@@ -77,6 +77,38 @@ export const KNOCKBACK = {
   maxSpeed: 40,
 } as const;
 
+/** Projectiles (shoot) and thrown weapons (throw). World units / seconds. */
+export const PROJECTILE = {
+  /** shot speed = base + perSpeed × spec.projectile.speed */
+  shotSpeedBase: 8,
+  shotSpeedPer: 14,
+  /** shot radius = base + per × areaUnits */
+  shotRadiusBase: 0.2,
+  shotRadiusPer: 0.15,
+  /** thrown weapon flies at this speed, out to its reach and back */
+  throwSpeed: 12,
+  throwRadiusBase: 0.3,
+  throwRadiusPer: 0.12,
+  /**
+   * A boomerang can hit the same target going out AND coming back, so the per-attack budget is
+   * split across the legs (sums to 1 → a throw that connects both ways = one hit's worth).
+   * Playtest 2026-10-03: at 1 + 1 it was the strongest weapon by far.
+   */
+  throwOutMul: 0.6,
+  throwBackMul: 0.4,
+  /** homing turn rate (rad/s) and how far it looks for a target */
+  homingTurn: 4,
+  homingRange: 6,
+  bounces: 2,
+  /** split: two children at ±angle, when the parent hits or at this fraction of its life */
+  splitAngleDeg: 30,
+  splitAtLife: 0.6,
+  /** arc (lob): lands at the end of its range and splashes */
+  arcSplashBase: 1.0,
+  arcSplashPer: 0.5,
+  arcPeakHeight: 2.2,
+} as const;
+
 /** Phase lengths in seconds. Server-authoritative. */
 export const PHASE_SECONDS = {
   draw: 20,

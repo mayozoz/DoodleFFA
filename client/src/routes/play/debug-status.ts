@@ -20,7 +20,7 @@ export function mountPlayDebug(ctx: PlayCtx) {
     const w = ctx.conn.db.weapon.player.find(ctx.identity);
     if (r.phase !== 'lobby') {
       items.push(w
-        ? { level: w.status === 'pending' ? 'wait' : w.status === 'fallback' ? 'warn' : 'ok', text: `my weapon: ${w.status}${w.spec ? '' : ' (no spec yet)'}` }
+        ? { level: w.status === 'pending' || w.status === 'generating' ? 'wait' : w.status === 'fallback' ? 'warn' : 'ok', text: `my weapon: ${w.status}${w.spec ? '' : ' (no spec yet)'}` }
         : { level: r.phase === 'draw' ? 'wait' : 'warn', text: 'my weapon: no drawing submitted yet' });
     }
     if (!RUN_GENERATION) items.push({ level: 'warn', text: 'AI generation off (RUN_GENERATION = false) → every weapon uses the fallback' });

@@ -7,7 +7,10 @@
 // Requires generated bindings (pnpm stdb:generate) and Node ≥ 22 (or `undici` installed).
 
 import { readFileSync, readdirSync } from 'node:fs';
+import { extractFeatures } from '../packages/spec/src';
 import { DbConnection } from '../client/src/module_bindings';
+import { rasterize } from './lab/png';
+import { SYNTHETIC } from './lab/synthetic';
 
 const [code = '', nArg = '12', uri = 'ws://localhost:3000', db = 'doodle-arena'] = process.argv.slice(2);
 if (!code) { console.error('usage: pnpm loadtest <ROOM> [clients] [uri] [db]'); process.exit(1); }
@@ -39,8 +42,11 @@ function bot(i: number) {
         if (!r) return;
         if ((r.phase === 'draw' || r.phase === 'drop') && !submitted) {
           submitted = true;
-          const png = SAMPLES.length ? SAMPLES[i % SAMPLES.length]! : PNG_1x1;
-          void conn.reducers.submitDrawing({ strokes: '{"width":512,"height":512,"strokes":[]}', png, features: '{}' });
+          // Synthetic doodles with real strokes → real features → varied fallback archetypes.
+          const names = Object.keys(SYNTHETIC);
+          const d = SYNTHETIC[names[i % names.length]!]!;
+          const png = names.length ? rasterize(d) : SAMPLES.length ? SAMPLES[i % SAMPLES.length]! : PNG_1x1;
+          void conn.reducers.submitDrawing({ strokes: JSON.stringify(d), png, features: JSON.stringify(extractFeatures(d)) });
         }
         if (r.phase === 'drop') void conn.reducers.setDrop({ x: Math.random(), y: Math.random() });
         if (r.phase === 'battle') {

@@ -8,6 +8,7 @@ import { resultsOverlay } from './results';
 import { mountScreenDebug } from './debug-status';
 import { mountScoreboard } from './scoreboard';
 import { mountReveal } from './reveal';
+import { mountCommentator } from './commentator';
 
 // Shared screen (/screen). Creates a room, subscribes to everything public for it, and
 // renders. It never simulates — positions come from `fighter` rows, ~100 ms behind.
@@ -25,6 +26,7 @@ export async function mount(el: HTMLElement) {
 
   let code = '';
   let phase: Phase | null = null;
+  let commentator: ReturnType<typeof mountCommentator> | null = null;
   let cleanup = () => {};
 
   const render = () => {
@@ -35,6 +37,7 @@ export async function mount(el: HTMLElement) {
     cleanup();
     overlay.innerHTML = '';
     arena.setPhase(phase);
+    commentator?.setPhase(phase);
     if (phase === 'lobby') cleanup = lobbyOverlay(overlay, conn, code);
     else if (phase === 'results') {
       const a = resultsOverlay(overlay, conn, code), b = mountScoreboard(overlay, conn, code);
@@ -67,6 +70,7 @@ export async function mount(el: HTMLElement) {
     if (code) return;
     code = roomCode;
     mountScreenDebug(conn, code);
+    commentator = mountCommentator(conn, code);
     arena.setRoom(code);
     conn.subscriptionBuilder().onApplied(render).subscribe([
       `SELECT * FROM player WHERE room_code = '${code}'`,
