@@ -1,3 +1,39 @@
+.drawing-page {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 12px 16px max(12px, env(safe-area-inset-bottom));
+  overflow-y: auto;
+  touch-action: pan-y;
+}
+.drawing-page .countdown { font-size: clamp(32px, 7dvh, 56px); }
+.drawing-page #c {
+  width: min(92vw, 52dvh, 512px);
+  flex: none;
+  aspect-ratio: 1;
+  background: #fff;
+  border: 6px solid var(--player);
+  border-radius: 16px;
+  touch-action: none;
+}
+.drawing-palette {
+  display: grid;
+  grid-template-columns: repeat(6, 44px);
+  gap: 10px;
+}
+.drawing-color { width: 44px; height: 44px; padding: 0; border: 2px solid #ffffff55; }
+.drawing-tools { display: flex; gap: 12px; width: min(100%, 350px); }
+.drawing-tools button { flex: 1; min-height: 56px; font-size: 20px; padding: 12px 16px; }
+.drawing-tools #undo span { font-size: 28px; vertical-align: middle; }
+.drawing-tools button:disabled { opacity: .4; }
+.drawing-tools #eraser { background: #eeeaf7; }
+.drawing-tools #eraser[aria-pressed="true"] { outline: 3px solid var(--player); outline-offset: 3px; }
+@media (max-width: 350px) {
+  .drawing-palette { gap: 6px; }
+}
 .drawing-color[aria-pressed="true"] {
   outline: 3px solid #fff;
   outline-offset: 2px;

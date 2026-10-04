@@ -1,4 +1,4 @@
-import { ABILITY_TUNING, arenaExtents, mulberry32, revealSeconds, stormStartRadius, type Phase } from '@doodle/spec';
+import { ABILITIES, ABILITY_TUNING, arenaExtents, mulberry32, revealSeconds, stormStartRadius, type Phase, type AbilityId } from '@doodle/spec';
 import { GAME, PHASE_SECONDS } from '../balance';
 import { addSeconds } from './time';
 import { applyFallbacks } from './weapons';
@@ -28,6 +28,14 @@ export function enterPhase(ctx: Ctx, r: RoomRow, phase: Phase) {
       resetRound(ctx, r.code); // also covers "Play again" straight from results
       next.winner = '';
       break;
+    case 'drop': {
+      const random = mulberry32(r.seed ^ Number(ctx.timestamp.microsSinceUnixEpoch & 0xffffffffn));
+      const abilities = Object.keys(ABILITIES) as AbilityId[];
+      for (const p of ctx.db.player.roomCode.filter(r.code)) {
+        ctx.db.player.identity.update({ ...p, abilityId: abilities[Math.floor(random() * abilities.length)]! });
+      }
+      break;
+    }
     case 'reveal': {
       applyFallbacks(ctx, r.code, r.seed);
       // One showcase per weapon + 3‥2‥1 (packages/spec/src/timing.ts — clients use the same math).

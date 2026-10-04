@@ -3,24 +3,34 @@ import { extractFeatures, type Drawing, type Stroke } from '@doodle/spec';
 import { mountCountdown } from '../../ui/countdown';
 import { debug } from '../../debug';
 import type { View } from './types';
+import { eraseAt } from './erase';
+import { preloadAbilityIcons } from '../../ui/ability-icons';
 
-const COLORS = ['#111111', '#ff3b3b', '#2f6bff', '#22c55e'];
+const COLORS = [
+  ['Black', '#111111'], ['Gray', '#64748b'], ['Red', '#ff3b3b'],
+  ['Orange', '#f97316'], ['Yellow', '#facc15'], ['Green', '#22c55e'],
+  ['Teal', '#14b8a6'], ['Blue', '#2f6bff'], ['Purple', '#8b5cf6'],
+  ['Pink', '#ec4899'], ['Brown', '#92400e'], ['Cream', '#fde4b2'],
+] as const;
 const SIZE = 512; // canvas resolution sent to the server
 /** M3: flip on to kick off the hidden generation procedures after submit. */
 export const RUN_GENERATION = false;
 /** Sound generation can run independently of spec and sprite generation. */
 export const RUN_SFX_GENERATION = true;
 
-/** 20 s doodle canvas: 4 colors + undo, border in player color. Submits when the phase ends. */
+/** Doodle canvas with touch-friendly colors, eraser and undo. Submits when the phase ends. */
 export const drawView: View = (ctx) => {
+  preloadAbilityIcons();
   ctx.el.innerHTML = `
-    <div class="center" style="gap:8px">
+    <div class="drawing-page">
       <div id="cd"></div>
-      <canvas id="c" width="${SIZE}" height="${SIZE}"
-        style="width:min(92vw,70dvh);aspect-ratio:1;background:#fff;border:6px solid var(--player);border-radius:16px;touch-action:none"></canvas>
-      <div style="display:flex;gap:8px">
-        ${COLORS.map((c, i) => `<button class="drawing-color" data-c="${c}" aria-label="${['Black', 'Red', 'Blue', 'Green'][i]} drawing color" aria-pressed="${i === 0}" style="background:${c};width:44px;height:44px;padding:0"></button>`).join('')}
-        <button id="undo">↶</button>
+      <canvas id="c" width="${SIZE}" height="${SIZE}" aria-label="Draw your weapon"></canvas>
+      <div class="drawing-palette" role="group" aria-label="Drawing colors">
+        ${COLORS.map(([name, c], i) => `<button class="drawing-color" data-c="${c}" aria-label="${name} drawing color" aria-pressed="${i === 0}" style="background:${c}"></button>`).join('')}
+      </div>
+      <div class="drawing-tools">
+        <button id="eraser" aria-pressed="false">Eraser</button>
+        <button id="undo" aria-label="Undo last drawing action" disabled><span aria-hidden="true">↶</span> Undo</button>
       </div>
     </div>`;
   const room = () => ctx.conn.db.room.code.find(ctx.roomCode);
@@ -28,7 +38,13 @@ export const drawView: View = (ctx) => {
   const canvas = ctx.el.querySelector<HTMLCanvasElement>('#c')!;
   const g = canvas.getContext('2d')!;
   const drawing: Drawing = { width: SIZE, height: SIZE, strokes: [] };
-  let color = COLORS[0]!;
+  let color: string = COLORS[0][1];
+  let erasing = false;
+  let pointer: number | null = null;
+  let last: [number, number] | null = null;
+  const history: Stroke[][] = [];
+  const undo = ctx.el.querySelector<HTMLButtonElement>('#undo')!;
+  const eraser = ctx.el.querySelector<HTMLButtonElement>('#eraser')!;
   let cur: Stroke | null = null;
   let t0 = 0;
 
@@ -39,6 +55,13 @@ export const drawView: View = (ctx) => {
     for (const s of drawing.strokes) {
       g.strokeStyle = s.color;
       g.lineWidth = s.width;
+      if (s.points.length === 1) {
+        g.fillStyle = s.color;
+        g.beginPath();
+        g.arc(s.points[0]![0], s.points[0]![1], s.width / 2, 0, Math.PI * 2);
+        g.fill();
+        continue;
+      }
       g.beginPath();
       s.points.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y)));
       g.stroke();
@@ -46,28 +69,74 @@ export const drawView: View = (ctx) => {
   };
   const pos = (e: PointerEvent): [number, number] => {
     const r = canvas.getBoundingClientRect();
-    return [((e.clientX - r.left) / r.width) * SIZE, ((e.clientY - r.top) / r.height) * SIZE];
+    const scaleX = r.width / canvas.offsetWidth, scaleY = r.height / canvas.offsetHeight;
+    return [
+      Math.max(0, Math.min(SIZE, (e.clientX - r.left - canvas.clientLeft * scaleX) / (canvas.clientWidth * scaleX) * SIZE)),
+      Math.max(0, Math.min(SIZE, (e.clientY - r.top - canvas.clientTop * scaleY) / (canvas.clientHeight * scaleY) * SIZE)),
+    ];
+  };
+  const eraseTo = (point: [number, number]) => {
+    const from = last ?? point;
+    const steps = Math.max(1, Math.ceil(Math.hypot(point[0] - from[0], point[1] - from[1]) / 7));
+    for (let i = 0; i <= steps; i++) {
+      drawing.strokes = eraseAt(drawing.strokes,
+        from[0] + (point[0] - from[0]) * i / steps,
+        from[1] + (point[1] - from[1]) * i / steps, 14);
+    }
+    last = point;
   };
   canvas.onpointerdown = (e) => {
+    if (pointer !== null) return;
+    pointer = e.pointerId;
     canvas.setPointerCapture(e.pointerId);
+    history.push(structuredClone(drawing.strokes));
+    undo.disabled = false;
     t0 = performance.now();
-    cur = { color, width: 10, points: [[...pos(e), 0]] };
-    drawing.strokes.push(cur);
-  };
-  canvas.onpointermove = (e) => {
-    if (!cur) return;
-    cur.points.push([...pos(e), performance.now() - t0]);
+    last = null;
+    if (erasing) eraseTo(pos(e));
+    else {
+      cur = { color, width: 10, points: [[...pos(e), 0]] };
+      drawing.strokes.push(cur);
+    }
     redraw();
   };
-  canvas.onpointerup = () => { cur = null; };
+  canvas.onpointermove = (e) => {
+    if (pointer !== e.pointerId) return;
+    if (erasing) eraseTo(pos(e));
+    else cur?.points.push([...pos(e), performance.now() - t0]);
+    redraw();
+  };
+  const finish = (e: PointerEvent) => {
+    if (pointer !== e.pointerId) return;
+    pointer = null;
+    cur = null;
+    last = null;
+  };
+  canvas.onpointerup = finish;
+  canvas.onpointercancel = finish;
+  canvas.onlostpointercapture = finish;
   const colorButtons = ctx.el.querySelectorAll<HTMLButtonElement>('[data-c]');
   colorButtons.forEach((button) => {
     button.onclick = () => {
       color = button.dataset.c!;
+      erasing = false;
+      eraser.setAttribute('aria-pressed', 'false');
       colorButtons.forEach((swatch) => swatch.setAttribute('aria-pressed', String(swatch === button)));
     };
   });
-  ctx.el.querySelector<HTMLButtonElement>('#undo')!.onclick = () => { drawing.strokes.pop(); redraw(); };
+  eraser.onclick = () => {
+    erasing = !erasing;
+    eraser.setAttribute('aria-pressed', String(erasing));
+    colorButtons.forEach(button => button.setAttribute('aria-pressed', String(!erasing && button.dataset.c === color)));
+  };
+  undo.onclick = () => {
+    const previous = history.pop();
+    if (previous) drawing.strokes = previous;
+    cur = null;
+    pointer = null;
+    undo.disabled = history.length === 0;
+    redraw();
+  };
   redraw();
 
   let submitted = false;

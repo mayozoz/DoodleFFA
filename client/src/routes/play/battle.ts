@@ -7,6 +7,7 @@ import { click, resumeAudio } from '../../audio/sfx';
 import { mountRotateHint } from '../../ui/rotate-hint';
 import type { View } from './types';
 import './battle-controls.css';
+import { abilityIcon } from '../../ui/ability-icons';
 
 const SEND_HZ = 20;
 
@@ -32,7 +33,11 @@ export const battleView: View = (ctx) => {
             <circle id="ring" cx="50" cy="50" r="47" fill="none" stroke="#fff" stroke-width="2" pathLength="1" stroke-dasharray="1" stroke-dashoffset="0"/>
           </svg>
         </div>
-          <button id="special" class="battle-special" aria-label="Special ability">Special · 2/2</button>
+        <button id="special" class="battle-special" aria-label="Special ability">
+          <span class="battle-special-art"></span>
+          <span class="battle-special-name">Special</span>
+          <span class="battle-special-status">2/2</span>
+        </button>
       </div>
     </div>`;
 
@@ -80,6 +85,10 @@ export const battleView: View = (ctx) => {
   };
 
   const special = ctx.el.querySelector<HTMLButtonElement>('#special')!;
+  const specialName = special.querySelector<HTMLElement>('.battle-special-name')!;
+  const specialStatus = special.querySelector<HTMLElement>('.battle-special-status')!;
+  const specialArt = special.querySelector<HTMLElement>('.battle-special-art')!;
+  let displayedAbility = '';
   special.onpointerdown = () => {
     if (special.disabled) return;
     click(); // no vibration: vibration is reserved for damage you take
@@ -95,12 +104,19 @@ export const battleView: View = (ctx) => {
     const w = ctx.conn.db.weapon.player.find(ctx.identity);
     if (f) {
       const ability = isAbilityId(f.abilityId) ? ABILITIES[f.abilityId] : ABILITIES.flash;
+      const abilityId = isAbilityId(f.abilityId) ? f.abilityId : 'flash';
+      if (displayedAbility !== abilityId) {
+        displayedAbility = abilityId;
+        specialArt.innerHTML = abilityIcon(abilityId);
+      }
       const abilityLeft = secondsLeft(f.abilityReadyAt);
       const effects = JSON.parse(f.effects) as Record<string, { until: number }>;
       const statusLocked = ['silenced', 'frozen'].some(key => effects[key] && secondsLeft(new Timestamp(BigInt(Math.round(effects[key]!.until * 1e6)))) > 0);
       special.disabled = f.hp <= 0 || f.abilityCharges === 0 || abilityLeft > 0 || statusLocked;
       special.style.opacity = special.disabled ? '0.5' : '1';
-      special.textContent = `${ability.name} · ${f.abilityCharges}/${ABILITY_TUNING.charges}${abilityLeft > 0 ? ` · ${Math.ceil(abilityLeft)}s` : statusLocked ? ' · Blocked' : ''}`;
+      specialName.textContent = ability.name;
+      specialStatus.textContent = `${f.abilityCharges}/${ABILITY_TUNING.charges}${abilityLeft > 0 ? ` · ${Math.ceil(abilityLeft)}s` : statusLocked ? ' · Blocked' : ''}`;
+      special.setAttribute('aria-label', `${ability.name}, ${specialStatus.textContent}`);
       hpFill.style.width = `${Math.max(0, (f.hp / MAX_HP) * 100)}%`;
       const rage = effects.rage && secondsLeft(new Timestamp(BigInt(Math.round(effects.rage.until * 1e6)))) > 0;
       const cd = (w?.spec ? (JSON.parse(w.spec) as StoredWeapon).stats.cooldown : 0.6) / (rage ? ABILITY_TUNING.attackSpeedMultiplier : 1);

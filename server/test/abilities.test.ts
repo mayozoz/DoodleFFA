@@ -40,6 +40,17 @@ describe('special abilities', () => {
     s.setTime(116); activateAbility(s.ctx, s.room, s.f, s.all);
     expect(s.f.abilityCharges).toBe(0); expect(s.f.x).toBeCloseTo(6);
   });
+  it.each(Object.keys(ABILITIES))('%s permits its second use exactly when cooldown ends', id => {
+    const s = setup(id);
+    activateAbility(s.ctx, s.room, s.f, s.all);
+    const ready = 100 + ABILITIES[id as keyof typeof ABILITIES].cooldown;
+    s.setTime(ready - 0.001);
+    activateAbility(s.ctx, s.room, s.f, s.all);
+    expect(s.f.abilityCharges).toBe(1);
+    s.setTime(ready);
+    activateAbility(s.ctx, s.room, s.f, s.all);
+    expect(s.f.abilityCharges).toBe(0);
+  });
   it('invulnerability blocks all damage for exactly two seconds', () => {
     const s = setup('invisible'); activateAbility(s.ctx, s.room, s.f, s.all);
     expect(damage(s.f, 500, 101.99)).toBe(0);

@@ -1,0 +1,13 @@
+.ability-icon { position: relative; display: inline-block; width: 100%; aspect-ratio: 1; border-radius: 50%; overflow: hidden; background: #11101b; vertical-align: middle; pointer-events: none; }
+.ability-icon img { position: absolute; width: 140%; height: 140%; max-width: none; left: -20%; top: -10%; object-fit: fill; user-select: none; }
+.ability-icon.is-animated { animation: ability-icon-float 2.2s ease-in-out infinite; }
+.ability-icon[data-ability="invisible"].is-animated { animation: ability-icon-fade 2.8s ease-in-out infinite; }
+.ability-icon[data-ability="rage"].is-animated, .ability-icon[data-ability="dash"].is-animated { animation: ability-icon-jolt 1.8s ease-in-out infinite; }
+.ability-icon[data-ability="shrink"].is-animated { animation: ability-icon-shrink 2.4s ease-in-out infinite; }
+.ability-icon[data-ability="flashbang"].is-animated { animation: ability-icon-flare 2.8s ease-in-out infinite; }
+@keyframes ability-icon-float { 0%, 100% { transform: translateY(0) rotate(-3deg); } 50% { transform: translateY(-3px) rotate(3deg); } }
+@keyframes ability-icon-fade { 0%, 100% { opacity: 1; } 50% { opacity: .3; } }
+@keyframes ability-icon-jolt { 0%, 60%, 100% { transform: translateX(0) rotate(0); } 70% { transform: translateX(-3px) rotate(-5deg); } 80% { transform: translateX(3px) rotate(5deg); } }
+@keyframes ability-icon-shrink { 0%, 100% { transform: scale(1); } 50% { transform: scale(.8); } }
+@keyframes ability-icon-flare { 0%, 65%, 100% { filter: brightness(1); } 75% { filter: brightness(1.8); } }
+@media (prefers-reduced-motion: reduce) { .ability-icon.is-animated { animation: none; } }

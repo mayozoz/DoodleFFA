@@ -143,11 +143,11 @@ The load test checks that the 20 Hz tick holds with 12 clients on Maincloud. If 
 ```
 
 ### Round state machine (`server/src/lib/phases.ts`)
-`lobby → draw (20 s) → drop (5–15 s) → reveal (≈ 1.2 + 1.6 × weapons + 3 s) → battle (60 s) → results (20 s) → lobby`
+`lobby → draw (20 s) → prepare/deploy (up to 60 s) → reveal (≈ 1.2 + 1.6 × weapons + 3 s) → battle (60 s) → results (20 s) → lobby`
 
-- **Drop ends early** (`dropCanEndEarly` in `server/src/lib/weapons.ts`). After at least `DROP_MIN_S` (5 s), Drop ends once every connected player has dropped *and* every weapon has every generation step that can actually finish. A step can't finish if its keys are missing, or while M1's hard-coded swing is on. 15 s stays the hard cap, so a slow AI call can only make Drop as long as it was before.
+- **Preparation and deployment** happen inside the Drop phase. Each phone spins a wheel for its server-assigned random special, shows an ability description and looping illustration, then shows its final weapon's type, range and attack animation before opening the deployment picker. `prepareWeapon` finalizes a fallback when AI has not returned by the weapon tutorial; late AI specs cannot change that tutorial's weapon. Progress survives a phone refresh within the same round. Drop ends once every connected player has deployed and no requested spec is still generating, after at least `DROP_MIN_S` (5 s), or at the 60-second cap. Players without a selected location receive a random spawn at battle start.
 - **Reveal** shows one showcase per weapon: the owner in their color, the weapon art with a test swing for its type, and its name. Then 3‥2‥1, then FIGHT!. The length comes from `revealSeconds(n)` in `packages/spec/src/timing.ts`, and the server and both clients use the same math, so they stay in sync without extra messages.
-- During Reveal the phone shows the player's own weapon card: art, name, and a control hint ("tap to **stab**"), never stats. It then shows the same 3‥2‥1.
+- The phone explains the weapon before deployment, including its elemental traits (Fire, Ice, Thunder, etc.), attack style, reach and cadence. Ability demonstrations run the battle simulation locally with scripted opponents and include Replay/Pause controls. During Reveal the phone shows a ready message and the synchronized 3‥2‥1 countdown.
 
 - `room.phase` changes only inside `enterPhase()`, which also runs the work that happens on entering each phase:
   - **draw:** reset the round
@@ -395,8 +395,10 @@ this change so the new procedure and private cache table are available.
 
 ### Special abilities
 
-During **Drop**, each player chooses one of 20 special abilities. **Flash** is the
-initial default. The choice locks at Reveal. Each battle starts with two charges;
+At the start of **Drop**, the server rolls one of 20 special abilities for each
+player. The phone animates a wheel landing on that result, then explains the move
+with a looping illustration before the weapon tutorial and deployment picker.
+Refreshing the phone cannot reroll the ability. Each battle starts with two charges;
 activating the ability spends one charge and starts that ability's cooldown. The
 phone's separate special button shows remaining charges and cooldown seconds.
 Presses during cooldown are discarded. Charges reset at the next battle.

@@ -15,7 +15,7 @@ import { mountCommentator } from './commentator';
 
 const LABEL: Partial<Record<Phase, string>> = {
   draw: 'Draw your weapon!',
-  drop: 'Pick your drop spot!',
+  drop: 'Spin for your special · learn your weapon · deploy!',
 };
 
 export async function mount(el: HTMLElement) {

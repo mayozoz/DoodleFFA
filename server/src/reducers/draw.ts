@@ -1,5 +1,7 @@
 import { SenderError, t } from 'spacetimedb/server';
 import spacetimedb from '../schema';
+import { fallbackSpecFromFeatures, hashString, MYSTERY_STICK, type DrawingFeatures } from '@doodle/spec';
+import { storeWeapon } from '../lib/weapons';
 
 const MAX_PNG_BYTES = 512 * 1024;
 const MAX_STROKES_JSON = 256 * 1024;
@@ -31,6 +33,21 @@ export const submitDrawing = spacetimedb.reducer(
     }
   },
 );
+
+/** Freeze the final weapon before showing its tutorial and choosing a deployment spot. */
+export const prepareWeapon = spacetimedb.reducer((ctx) => {
+  const p = ctx.db.player.identity.find(ctx.sender);
+  const r = p && ctx.db.room.code.find(p.roomCode);
+  const d = ctx.db.drawing.player.find(ctx.sender);
+  const w = ctx.db.weapon.player.find(ctx.sender);
+  if (!p || !r || r.phase !== 'drop' || !d || !w) throw new SenderError('drawing is not ready');
+  if (w.spec) return;
+  let spec = MYSTERY_STICK;
+  try {
+    spec = fallbackSpecFromFeatures(JSON.parse(d.features) as DrawingFeatures, r.seed ^ hashString(p.identity.toHexString()));
+  } catch { /* malformed features use the empty-drawing fallback */ }
+  ctx.db.weapon.player.update({ ...w, spec: storeWeapon(spec), status: 'fallback' });
+});
 
 /** Normalized 0–1 position on the mini-arena. Re-tap allowed; only during drop. */
 export const setDrop = spacetimedb.reducer(

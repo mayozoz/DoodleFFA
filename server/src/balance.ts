@@ -118,8 +118,8 @@ export const PROJECTILE = {
 /** Phase lengths in seconds. Server-authoritative. */
 export const PHASE_SECONDS = {
   draw: 20,
-  /** hard cap — Drop usually ends early once weapons are ready (DROP_MIN_S, dropCanEndEarly) */
-  drop: 15,
+  /** Wheel → ability tutorial → weapon tutorial → deployment; ends early when everyone drops. */
+  drop: 60,
   /** placeholder — actual length is revealSeconds(weapon count), set when Reveal starts */
   reveal: 15,
   battle: 60,

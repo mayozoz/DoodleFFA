@@ -1,0 +1,42 @@
+.prep-page { flex: 1; width: 100%; overflow-y: auto; padding: max(12px, env(safe-area-inset-top)) 18px max(24px, env(safe-area-inset-bottom)); touch-action: pan-y; }
+.prep-header { display: flex; align-items: center; justify-content: space-between; max-width: 520px; margin: auto; color: var(--muted); font-weight: 800; letter-spacing: .12em; }
+.prep-header .countdown { font-size: 26px; color: var(--player); letter-spacing: 0; }
+.prep-steps { display: flex; justify-content: center; gap: 6px; margin: 14px auto 26px; font-size: 12px; }
+.prep-steps span { padding: 6px 10px; border-radius: 999px; color: var(--muted); background: #ffffff08; }
+.prep-steps .is-current { background: var(--player); color: #111; font-weight: 800; }
+.prep-steps .is-done { color: var(--fg); }
+.prep-body { max-width: 520px; margin: auto; display: flex; flex-direction: column; align-items: center; gap: 16px; text-align: center; }
+.prep-body h1 { margin: 0; font-size: clamp(28px, 7vw, 40px); line-height: 1.1; }
+.prep-body p { margin: 0; line-height: 1.5; }
+.prep-eyebrow { color: var(--player); font-size: 12px; font-weight: 800; letter-spacing: .15em; }
+.prep-facts { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.prep-facts span { padding: 7px 12px; background: #ffffff0c; border: 1px solid #ffffff20; border-radius: 999px; font-size: 13px; }
+.prep-hint { color: var(--muted); font-size: 13px; }
+.prep-next { width: 100%; min-height: 54px; }
+.prep-next:disabled { opacity: .5; }
+.prep-error { color: #fda4af; font-size: 13px; }
+.prep-weapon-guide { display: grid; gap: 14px; }
+.prep-weapon-art { min-height: 80px; }
+.prep-arena { width: 100%; aspect-ratio: 16 / 9; position: relative; border: 4px solid var(--player); border-radius: 18px; background-color: #242133; background-image: linear-gradient(#ffffff0b 1px, transparent 1px), linear-gradient(90deg, #ffffff0b 1px, transparent 1px); background-size: 24px 24px; touch-action: none; }
+.prep-pin { display: none; position: absolute; width: 26px; height: 26px; margin: -13px; border: 3px solid #fff; border-radius: 50%; background: var(--player); box-shadow: 0 0 0 6px #ffffff22; pointer-events: none; }
+.prep-deploy-status { color: var(--player); font-weight: 800; }
+.ability-reel-shell { width: 100%; position: relative; margin: 16px 0 4px; padding-top: 20px; }
+.ability-reel-pointer { position: absolute; top: -10px; left: 50%; transform: translateX(-50%); color: var(--player); z-index: 3; font-size: 32px; text-shadow: 0 3px 4px #0008; }
+.ability-reel-window { height: 208px; overflow: hidden; position: relative; border: 2px solid #ffffff24; border-radius: 22px; background: #14101f; box-shadow: inset 0 0 24px #0008, 0 8px 28px #0004; }
+.ability-reel-window::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(90deg, #14101ff0, transparent 22%, transparent 78%, #14101ff0); }
+.ability-reel-track { position: relative; left: 50%; margin-left: -56px; display: flex; gap: 12px; width: max-content; padding: 18px 0; will-change: transform; }
+.ability-ticket { flex: 0 0 112px; width: 112px; height: 168px; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 10px 6px; border: 2px solid var(--ticket-accent); border-radius: 10px; background: #f8f3e9; color: #201930; box-shadow: 0 4px 10px #0006; }
+.ability-ticket-number { width: 100%; border-bottom: 2px dashed #20193044; padding-bottom: 5px; font-size: 8px; font-weight: 900; letter-spacing: .12em; }
+.ability-ticket-art { width: 76px; flex-shrink: 0; }
+.ability-ticket-name { font-size: 12px; font-weight: 900; line-height: 1.1; }
+.ability-ticket.is-selected { background: #fff; box-shadow: 0 0 22px var(--ticket-accent); }
+.ability-reel-selection { position: absolute; top: 12px; bottom: 12px; left: 50%; width: 124px; transform: translateX(-50%); border: 3px solid var(--player); border-radius: 14px; box-shadow: 0 0 18px #ffffff18; pointer-events: none; z-index: 2; }
+.prep-ability-art { width: 88px; }
+.wheel-result { font-weight: 800; font-size: 24px; color: var(--player); }
+.ability-demo { margin: 0; width: 100%; max-width: 380px; background: #ffffff06; border: 1px solid #ffffff16; border-radius: 18px; overflow: hidden; }
+
+.ability-demo canvas { display: block; width: 100%; aspect-ratio: 600 / 330; border-radius: 16px; }
+.ability-preview-status { padding: 10px 12px 0; color: var(--player); font-size: 13px; font-weight: 800; }
+.ability-preview-tools { display: flex; gap: 8px; justify-content: center; padding: 10px; }
+.ability-preview-tools button { min-height: 44px; padding: 8px 14px; border: 1px solid #ffffff30; background: #ffffff10; color: var(--fg); font-size: 13px; }
+

@@ -6,7 +6,7 @@ export const selectAbility = spacetimedb.reducer({ abilityId: t.string() }, (ctx
   if (!isAbilityId(abilityId)) return;
   const p = ctx.db.player.identity.find(ctx.sender);
   const r = p && ctx.db.room.code.find(p.roomCode);
-  if (!p || !r || !['lobby', 'draw', 'drop'].includes(r.phase)) return;
+  if (!p || !r || r.phase !== 'lobby') return;
   ctx.db.player.identity.update({ ...p, abilityId });
 });
 

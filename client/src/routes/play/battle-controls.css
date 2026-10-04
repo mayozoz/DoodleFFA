@@ -23,8 +23,16 @@
 .battle-hear { position: absolute; top: max(36px, calc(env(safe-area-inset-top) + 28px)); right: max(12px, env(safe-area-inset-right));
   z-index: 1; padding: 6px 12px; border-radius: 999px; border: 1px solid #ffffff66; background: #ffffff10; color: #fff;
   font-size: 13px; font-weight: 700; }
-.battle-attack-zone { gap: 12px; }
-/* Special ability: outline pill under the sword, same minimal language as the attack button */
-.battle-special { padding: 8px 14px; border-radius: 999px; border: 1.5px solid #ffffffb3; background: #ffffff08;
-  color: #fff; font-size: 14px; font-weight: 800; max-width: 46vw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.battle-attack-zone { display: flex; flex-direction: column; justify-content: center; gap: 12px; padding-top: 60px; padding-bottom: 16px; }
+.battle-attack-frame { width: clamp(110px, 48dvh, 260px); flex: none; }
+/* A fixed circular touch target, with the name and charges stacked inside. */
+.battle-special { position: relative; width: clamp(80px, 24dvh, 112px); aspect-ratio: 1; flex: none;
+  padding: 0; border-radius: 50%; border: 1.5px solid #ffffffb3; background: #ffffff08;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  color: #fff; font-size: 13px; font-weight: 800; white-space: normal; text-align: center; touch-action: none; }
+.battle-special-art { position: absolute; inset: 0; pointer-events: none; }
+.battle-special-name { position: absolute; top: 100%; margin-top: 5px; width: 150%; overflow-wrap: anywhere; line-height: 1.1; font-size: 11px; }
+.battle-special-status { position: absolute; bottom: 8px; padding: 3px 7px; border-radius: 999px; background: #11101be8; color: #fff; font-size: 11px; line-height: 1.2; pointer-events: none; }
+.battle-special:disabled .ability-icon { animation-play-state: paused; filter: grayscale(.65); }
+.battle-special:focus-visible { outline: 2px solid #fff; outline-offset: 5px; }
 .battle-special:disabled { opacity: .5; }

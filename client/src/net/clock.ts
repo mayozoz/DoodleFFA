@@ -5,8 +5,13 @@ import type { Timestamp } from 'spacetimedb';
 // it only to *display* countdowns. Never to decide game outcomes.
 
 let offsetMs = 0;
+let syncedPhaseStart: bigint | null = null;
 
 export function syncFromPhaseStart(phaseStartedAt: Timestamp) {
+  // Battle updates (e.g. the storm) carry the same phase start at 20 Hz.
+  // Re-syncing those would pin our estimated server clock to the phase start.
+  if (syncedPhaseStart === phaseStartedAt.microsSinceUnixEpoch) return;
+  syncedPhaseStart = phaseStartedAt.microsSinceUnixEpoch;
   offsetMs = Date.now() - Number(phaseStartedAt.toMillis());
 }
 
