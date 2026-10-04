@@ -21,7 +21,7 @@ describe('ElevenLabs sound pipeline', () => {
     expect(url).toContain('sound-generation?output_format=mp3_44100_128');
     expect(request.headers['xi-api-key']).toBe('test-key');
     expect(JSON.parse(request.body)).toMatchObject({ duration_seconds: 1, model_id: 'eleven_text_to_sound_v2' });
-    expect(mocks.write).toHaveBeenCalledWith(expect.anything(), 'sfxUrl', 'data:audio/mpeg;base64,SUQz');
+    expect(mocks.write).toHaveBeenCalledWith(expect.anything(), 'sfxUrl', 'data:audio/mpeg;base64,SUQz', false, job);
   });
 
   it('uses a custom prompt from the weapon spec', () => {

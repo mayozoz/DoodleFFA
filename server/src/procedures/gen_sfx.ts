@@ -37,7 +37,7 @@ export const genSfx = spacetimedb.procedure(t.unit(), (ctx) => {
     const bytes = res.bytes();
     if (!bytes.length || bytes.length > 64_000) throw new Error('Invalid sound response size');
     const url = `data:audio/mpeg;base64,${toBase64(bytes)}`;
-    writeIfStillPending(ctx, 'sfxUrl', url);
+    writeIfStillPending(ctx, 'sfxUrl', url, false, job);
   } catch (e) {
     logFail(ctx, job.roomCode, 'gen_sfx', e);
   }

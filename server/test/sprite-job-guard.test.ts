@@ -2,11 +2,12 @@ import { describe, expect, it, vi } from 'vitest';
 import { writeIfStillPending, type GenJob, type PCtx } from '../src/procedures/common';
 
 const png = new Uint8Array([1, 2, 3]);
-const job = { roomCode: 'TEST', round: 1, seed: 42, png } as GenJob;
+const job = { roomCode: 'TEST', round: 1, seed: 42, epoch: 'one', png } as GenJob;
 
 function attempt(overrides: { round?: number; phase?: string; png?: Uint8Array; code?: string; spriteUrl?: string } = {}) {
   const update = vi.fn();
   const tx = { db: {
+    generation: { player: { find: () => ({ epoch: 'one' }) } },
     weapon: { player: { find: () => ({ spriteUrl: overrides.spriteUrl ?? '' }), update } },
     player: { identity: { find: () => ({ roomCode: 'TEST' }) } },
     room: { code: { find: () => ({ code: overrides.code ?? 'TEST', round: overrides.round ?? 1, seed: 42, phase: overrides.phase ?? 'reveal' }) } },

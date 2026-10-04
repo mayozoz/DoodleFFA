@@ -227,7 +227,14 @@ export const admin = table(
   },
 );
 
+/** Private per-drawing claims: concurrent/repeated calls cannot spend credits twice. */
+export const generation = table({ name: 'generation' }, {
+  player: t.identity().primaryKey(),
+  epoch: t.string(),
+  spec: t.bool(), spriteUrl: t.bool(), sfxUrl: t.bool(),
+});
+
 const spacetimedb = schema({
-  room, player, drawing, doodle, weapon, weaponVoice, fighter, input, projectile, abilityObject, fxEvent, debugEvent, commentary, tickSchedule, secrets, admin,
+  generation, room, player, drawing, doodle, weapon, weaponVoice, fighter, input, projectile, abilityObject, fxEvent, debugEvent, commentary, tickSchedule, secrets, admin,
 });
 export default spacetimedb;

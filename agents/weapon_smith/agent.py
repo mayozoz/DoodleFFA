@@ -10,14 +10,17 @@ Run:  python agent.py      (see README.md)
 import hmac
 import os
 import time
+import json
+from pathlib import Path
 
 from dotenv import load_dotenv
 from uagents import Agent, Context
 
 from models import Health, SpecRequest, SpecResponse
 from smith import PROMPT_VERSION, forge
+from chat import protocol
 
-load_dotenv()
+load_dotenv(Path(__file__).with_name(".env"))
 
 PORT = int(os.environ.get("AGENT_PORT", "8001"))
 PUBLIC_URL = os.environ.get("AGENT_PUBLIC_URL", f"http://localhost:{PORT}").rstrip("/")
@@ -28,6 +31,9 @@ agent = Agent(
     seed=os.environ["AGENT_SEED"],
     port=PORT,
     endpoint=[f"{PUBLIC_URL}/submit"],
+    mailbox=os.environ.get("AGENT_MAILBOX", "false").lower() == "true",
+    publish_agent_details=True,
+    handle_messages_concurrently=True,
 )
 
 
@@ -42,18 +48,17 @@ async def spec(ctx: Context, req: SpecRequest) -> SpecResponse:
         return SpecResponse(error="unauthorized", prompt_version=PROMPT_VERSION)
     started = time.monotonic()
     try:
-        weapon_json = await forge(req.png_base64, req.features_json, req.flavor)
+        result = await forge(req.png_base64, req.features_json, req.flavor, seed=req.seed)
+        weapon_json = json.dumps(result["weapon"]["spec"])
         seconds = time.monotonic() - started
-        ctx.logger.info(f"forged weapon in {seconds:.1f}s")
+        ctx.logger.info(f"rest duration={seconds:.3f}s status={'fallback' if result['issues'] else 'success'}")
         return SpecResponse(weapon_json=weapon_json, prompt_version=PROMPT_VERSION, seconds=seconds)
     except Exception as e:  # the game falls back; just report what went wrong
-        ctx.logger.warning(f"forge failed: {e}")
+        ctx.logger.warning(f"rest duration={time.monotonic() - started:.3f}s status={type(e).__name__}")
         return SpecResponse(error=type(e).__name__, prompt_version=PROMPT_VERSION, seconds=time.monotonic() - started)
 
 
-# TODO(Phase 3): include the chat protocol and publish the manifest so the agent is discoverable
-# on Agentverse / ASI:One, e.g. agent.include(chat_protocol, publish_manifest=True). A chat message
-# with a doodle image should reply with a weapon card (name + archetype + effects).
+agent.include(protocol, publish_manifest=True)
 
 if __name__ == "__main__":
     agent.run()

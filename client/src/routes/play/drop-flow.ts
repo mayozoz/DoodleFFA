@@ -62,7 +62,17 @@ export const dropView: View = (ctx) => {
       const next = body.querySelector<HTMLButtonElement>('.prep-next')!;
       next.onclick = async () => {
         next.disabled = true; next.textContent = 'Preparing weapon…';
-        try { await ctx.conn.reducers.prepareWeapon({}); moveTo(2); }
+        try {
+          // Generation runs alongside the roll/special tutorial; wait at most the existing
+          // 12s request budget, then freeze fallback. The room deadline is unchanged.
+          const until = performance.now() + 12_000;
+          while (active && current === version && performance.now() < until &&
+                 ctx.conn.db.weapon.player.find(ctx.identity)?.status === 'generating') {
+            await new Promise(resolve => window.setTimeout(resolve, 100));
+          }
+          if (!active || current !== version) return;
+          await ctx.conn.reducers.prepareWeapon({}); moveTo(2);
+        }
         catch {
           if (!active || current !== version) return;
           body.querySelector<HTMLElement>('.prep-error')!.textContent = 'Your drawing is still arriving. Tap to try again.';

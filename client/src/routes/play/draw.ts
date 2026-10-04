@@ -13,8 +13,8 @@ const COLORS = [
   ['Pink', '#ec4899'], ['Brown', '#92400e'], ['Cream', '#fde4b2'],
 ] as const;
 const SIZE = 512; // canvas resolution sent to the server
-/** M3: flip on to kick off the hidden generation procedures after submit. */
-export const RUN_GENERATION = false;
+/** Request specs during preparation; the server requires explicit provider configuration. */
+export const RUN_GENERATION = true;
 /** Sound generation can run independently of spec and sprite generation. */
 export const RUN_SFX_GENERATION = true;
 /** Doodle → polished 2D art, independent of gameplay spec generation. */
@@ -160,7 +160,7 @@ export const drawView: View = (ctx) => {
       // (only the ?debug overlay lists them while they run).
       // Let sound generation use the finished spec's custom prompt when available.
       void debug.track('gen_spec', ctx.conn.procedures.genSpec({})).catch(() => {}).then(() => {
-        void debug.track('gen_sfx', ctx.conn.procedures.genSfx({})).catch(() => {});
+        if (RUN_SFX_GENERATION) void debug.track('gen_sfx', ctx.conn.procedures.genSfx({})).catch(() => {});
       });
     } else if (RUN_SFX_GENERATION) {
       void debug.track('gen_sfx', ctx.conn.procedures.genSfx({})).catch(() => {});

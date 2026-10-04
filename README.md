@@ -288,13 +288,12 @@ A voiced announcer on the shared screen that riffs on players' names and their w
 - **Fallback:** if `character.glb` fails to load, both `/screen` and `/dev/weapons` use the 2D rig and the Pixi grid.
 - **Playground flags:** `/dev/weapons?pose=swing&t=1.5&noweapon&run` freezes the body at a point in the attack (`t` 0–1 wind-up, 1–2 strike, 2–3 recover), hides the weapon, and turns on running. Use these to tune poses.
 
-### LLM provider: ASI:One only
-- All language-model work goes to **ASI:One (Fetch.ai)**. Weapon specs use `asi1`, which accepts the doodle image. Commentary lines use `asi1-mini`. **Gemini is not used** (removed 2026-10-03).
-- `SPEC_PROVIDER` in `server/src/config.ts` is `'asi1'`. The request builder lives in `server/src/procedures/spec_requests.ts`, shared with `pnpm lab`.
-- Strict JSON output: `SPEC_JSON_SCHEMA` in `server/src/prompts/spec.v1.ts` follows OpenAI-style strict mode: `additionalProperties: false` everywhere and every key in `required`. `server/test/spec-schema.test.ts` keeps it valid and matched to the WeaponSpec fields.
-- `spacetime logs` shows `[gen] spec asi1/spec.v1 <player>: 3.4s, 1 field(s) fixed` per weapon.
-- The Fetch.ai **Weapon Smith agent** (`agents/weapon_smith/`) wraps the same prompt and schema behind a REST endpoint, ready for Phase 2 (`SPEC_PROVIDER = 'agent'`). Run `pnpm agents:schema` after any prompt or enum change to keep it in sync.
-- **No AI sprites.** Gemini's image model was the only sprite generator, so weapons always use the player's own doodle, cut out of its white background with an outline and glow. `weapon.spriteUrl` is kept for a future image provider.
+### Weapon generation and FetchAI integration
+- Submitted drawings start spec generation during preparation, alongside the existing tutorials. Set private `SPEC_PROVIDER=agent`, `AGENT_URL`, and `AGENT_SHARED_SECRET` to opt into Weapon Smith, or `SPEC_PROVIDER=asi1` and `ASI_ONE_API_KEY` for the direct ASI provider. Missing configuration keeps deterministic gameplay.
+- All spec responses use the canonical validator and authoritative balance rules before storage. Requests run in procedures outside transactions; per-round claims prevent duplicate calls and snapshot guards discard stale responses. Finalization and the existing deadline remain authoritative.
+- Gemini sprite and ElevenLabs sound generation retain their existing independent behavior and fallback assets. No generation request runs in movement, attacks, or the combat tick.
+- Weapon Smith also supports text weapon creation using official ACP 0.3.0, with acknowledgements, stateless sessions, persistent bounded deduplication, manifest configuration, and a TypeScript validation/balance tool. Registration and ASI discovery require deployment/account verification; neither is claimed complete.
+- See [Weapon Smith instructions, verification checklist and demos](agents/weapon_smith/README.md) for exact local startup, private configuration, publication and Agentverse mailbox steps. Run `node --import tsx scripts/export-agent-schema.ts` after changing the prompt/schema.
 
 ### Fallbacks (round never stalls)
 | Missing at Reveal | Where | Fallback |
