@@ -62,12 +62,22 @@ export const dropView: View = (ctx) => {
       const next = body.querySelector<HTMLButtonElement>('.prep-next')!;
       next.onclick = async () => {
         next.disabled = true; next.textContent = 'Preparing weapon…';
-        try { await ctx.conn.reducers.prepareWeapon({}); moveTo(2); }
-        catch {
-          if (!active || current !== version) return;
-          body.querySelector<HTMLElement>('.prep-error')!.textContent = 'Your drawing is still arriving. Tap to try again.';
-          next.textContent = 'See my weapon →'; next.disabled = false;
+        // While the server is still designing the weapon, it refuses for a few seconds; keep
+        // retrying quietly (it locks in the shape-based weapon once the wait runs out).
+        for (;;) {
+          try { await ctx.conn.reducers.prepareWeapon({}); break; }
+          catch {
+            if (!active || current !== version) return;
+            if (ctx.conn.db.weapon.player.find(ctx.identity)?.status !== 'generating') {
+              body.querySelector<HTMLElement>('.prep-error')!.textContent = 'Your drawing is still arriving. Tap to try again.';
+              next.textContent = 'See my weapon →'; next.disabled = false;
+              return;
+            }
+            await new Promise((r) => setTimeout(r, 500));
+            if (!active || current !== version) return;
+          }
         }
+        moveTo(2);
       };
     } else if (step === 2) {
       const w = ctx.conn.db.weapon.player.find(ctx.identity);

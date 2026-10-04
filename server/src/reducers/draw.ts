@@ -2,6 +2,8 @@ import { SenderError, t } from 'spacetimedb/server';
 import spacetimedb from '../schema';
 import { fallbackSpecFromFeatures, hashString, MYSTERY_STICK, type DrawingFeatures } from '@doodle/spec';
 import { storeWeapon } from '../lib/weapons';
+import { secondsBetween } from '../lib/time';
+import { SPEC_WAIT_S } from '../balance';
 
 const MAX_PNG_BYTES = 512 * 1024;
 const MAX_STROKES_JSON = 256 * 1024;
@@ -42,6 +44,10 @@ export const prepareWeapon = spacetimedb.reducer((ctx) => {
   const w = ctx.db.weapon.player.find(ctx.sender);
   if (!p || !r || r.phase !== 'drop' || !d || !w) throw new SenderError('drawing is not ready');
   if (w.spec) return;
+  // The AI weapon is on its way: the phone retries (still showing "Preparing weapon…").
+  if (w.status === 'generating' && secondsBetween(r.phaseStartedAt, ctx.timestamp) < SPEC_WAIT_S) {
+    throw new SenderError('weapon still generating');
+  }
   let spec = MYSTERY_STICK;
   try {
     spec = fallbackSpecFromFeatures(JSON.parse(d.features) as DrawingFeatures, r.seed ^ hashString(p.identity.toHexString()));

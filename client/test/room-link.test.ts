@@ -8,7 +8,7 @@ it('discovers the current LAN address when the shared screen uses localhost', as
 });
 it('preserves the address used by a phone or shared screen on the network', async () => {
   vi.stubEnv('DEV', true); vi.stubEnv('VITE_PUBLIC_URL', 'http://old-address:5173');
-  vi.stubGlobal('location', new URL('http://192.168.1.99:5173/solo'));
+  vi.stubGlobal('location', new URL('http://192.168.1.99:5173/screen'));
   expect(await roomJoinUrl('WXYZ')).toBe('http://192.168.1.99:5173/play?room=WXYZ');
 });
 it('uses the configured public address in production', async () => {

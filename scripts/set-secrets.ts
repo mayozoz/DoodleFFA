@@ -2,7 +2,7 @@
 // Must run as the identity that published the module (the CLI's identity), so we shell out to
 // `spacetime call` rather than connecting as a fresh anonymous client.
 //
-//   pnpm tsx scripts/set-secrets.ts            # local
+//   pnpm tsx scripts/set-secrets.ts http://127.0.0.1:3010   # local (pass the server explicitly)
 //   pnpm tsx scripts/set-secrets.ts maincloud  # -s maincloud
 
 import { execFileSync } from 'node:child_process';
@@ -22,6 +22,14 @@ for (const k of SECRET_KEYS) {
   const v = env[k];
   if (!v) { console.log(`skip ${k} (empty)`); continue; }
   const args = ['call', ...(server ? ['-s', server] : []), DB, 'set_secret', JSON.stringify(k), JSON.stringify(v)];
-  execFileSync('spacetime', args, { stdio: ['ignore', 'ignore', 'inherit'] });
+  try {
+    execFileSync('spacetime', args, { stdio: ['ignore', 'ignore', 'pipe'] });
+  } catch (e) {
+    // the error message echoes the command line (including the value) — print only stderr, redacted
+    const { stderr, message } = e as { stderr?: Buffer; message?: string };
+    const err = (String(stderr ?? '').trim() || String(message ?? e)).split(v).join('<redacted>');
+    console.error(`failed ${k}:\n${err.trim()}`);
+    process.exit(1);
+  }
   console.log(`set ${k}`); // never print the value
 }

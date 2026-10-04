@@ -40,7 +40,7 @@ describe('controller joining', () => {
     room.phase = 'draw'; updated({}, {}, room);
     expect(state.views).toEqual(['lobby', 'draw']);
   });
-  it('opens drawing if solo auto-starts before the subscription finishes', async () => {
+  it('opens drawing if the round starts before the subscription finishes', async () => {
     await mount({ innerHTML: '' } as HTMLElement);
     const joining = state.joined('TEST');
     room.phase = 'draw'; updated({}, {}, room);

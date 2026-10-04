@@ -6,7 +6,6 @@ debug.mount(); // no-op unless ?debug / VITE_DEBUG=1
 // Tiny path router — one app, two player-facing views plus the dev playground.
 const routes: Record<string, () => Promise<{ mount(el: HTMLElement): void | Promise<void> }>> = {
   '': () => import('./routes/title'),
-  '/solo': () => import('./routes/solo'),
   '/play': () => import('./routes/play'),
   '/screen': () => import('./routes/screen'),
   '/dev/weapons': () => import('./routes/dev-weapons'),

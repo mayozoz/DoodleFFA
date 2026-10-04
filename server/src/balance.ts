@@ -116,6 +116,12 @@ export const PROJECTILE = {
 } as const;
 
 /** Phase lengths in seconds. Server-authoritative. */
+/**
+ * How long (from the start of Drop) "See my weapon" waits on an AI weapon that's still being
+ * designed before locking in the shape-based one. ASI:One takes ~3–5 s from submit.
+ */
+export const SPEC_WAIT_S = 8;
+
 export const PHASE_SECONDS = {
   draw: 20,
   /** Wheel → ability tutorial → weapon tutorial → deployment; ends early when everyone drops. */

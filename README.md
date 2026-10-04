@@ -10,8 +10,8 @@ The planning brief is the source of truth for design. This README covers how the
 
 ```
 .
-├── client/                    Vite + TS app — modes, solo, party and controller routes
-│   ├── src/main.ts            path router: /, /solo, /play, /screen, /dev/weapons
+├── client/                    Vite + TS app — title, party and controller routes
+│   ├── src/main.ts            path router: /, /play, /screen, /dev/weapons
 │   ├── src/net/               SpacetimeDB connection + server-clock helpers
 │   ├── src/routes/play/       controller: join → draw → drop → battle → results
 │   ├── src/routes/screen/     shared display: lobby/QR, PixiJS arena, results
@@ -69,14 +69,13 @@ pnpm dev                          # vite --host on :5173
 ```
 
 Open:
-- **Title screen:** `http://localhost:5173/`. Click Start game (or press Enter), then choose Single player or Multiplayer. The armed ghost cast matches the ability artwork.
-- **Single player:** `/solo` opens a shared-screen room with three bots and a QR code. Scan it (or open the room link) on your phone, enter your name, then click Start solo match on the host. Draw and use the joystick and attack buttons on your phone.
+- **Title screen:** `http://localhost:5173/`. Click Start game (or press Enter), then choose Multiplayer. The armed ghost cast matches the ability artwork.
 - **Multiplayer:** `/screen` hosts a party with a QR code, clickable join link, copy-link button, and room code. Start becomes available when at least two players join.
 - **Shared screen:** `http://localhost:5173/screen`. It creates a room and shows a QR code.
 - **Controllers:** scan the QR, or open `http://<LAN-IP>:5173/play?room=ABCD`.
 - **Playground:** `http://localhost:5173/dev/weapons`.
 
-You can play in desktop browser tabs while developing. `/screen` and `/play` keep separate identity tokens, so one laptop can act as the screen and a controller at once. Solo uses separate host and bot tokens. Humans join either mode through the same phone controller. Bots send normal inputs from the solo page; the server still simulates every battle. Keep the solo page open during the match. Use a private window for each extra multiplayer controller.
+You can play in desktop browser tabs while developing. `/screen` and `/play` keep separate identity tokens, so one laptop can act as the screen and a controller at once. Use a private window for each extra multiplayer controller.
 
 > In local development, Vite forwards database WebSockets through port 5173 to local port 3000, so phones use the game’s current address. When the host opens localhost, the QR/link discovers its current LAN address automatically. Both devices must use the same Wi-Fi. Production builds use `VITE_STDB_URI` and `VITE_PUBLIC_URL`; configure those for the deployed server.
 
@@ -289,12 +288,13 @@ A voiced announcer on the shared screen that riffs on players' names and their w
 - **Playground flags:** `/dev/weapons?pose=swing&t=1.5&noweapon&run` freezes the body at a point in the attack (`t` 0–1 wind-up, 1–2 strike, 2–3 recover), hides the weapon, and turns on running. Use these to tune poses.
 
 ### LLM provider: ASI:One only
-- All language-model work goes to **ASI:One (Fetch.ai)**. Weapon specs use `asi1`, which accepts the doodle image. Commentary lines use `asi1-mini`. **Gemini is not used** (removed 2026-10-03).
+- All language-model work goes to **ASI:One (Fetch.ai)**. Weapon specs use `asi1`, which accepts the doodle image. Commentary lines use `asi1-mini`.
+- Weapon art (image to image) uses **xAI** `grok-imagine-image` (see "Drawing to 2D weapon images"). Gemini and Bedrock were tried and dropped: Gemini's image model has no free quota, and the AWS account isn't allowlisted for Bedrock.
 - `SPEC_PROVIDER` in `server/src/config.ts` is `'asi1'`. The request builder lives in `server/src/procedures/spec_requests.ts`, shared with `pnpm lab`.
 - Strict JSON output: `SPEC_JSON_SCHEMA` in `server/src/prompts/spec.v1.ts` follows OpenAI-style strict mode: `additionalProperties: false` everywhere and every key in `required`. `server/test/spec-schema.test.ts` keeps it valid and matched to the WeaponSpec fields.
 - `spacetime logs` shows `[gen] spec asi1/spec.v1 <player>: 3.4s, 1 field(s) fixed` per weapon.
 - The Fetch.ai **Weapon Smith agent** (`agents/weapon_smith/`) wraps the same prompt and schema behind a REST endpoint, ready for Phase 2 (`SPEC_PROVIDER = 'agent'`). Run `pnpm agents:schema` after any prompt or enum change to keep it in sync.
-- **No AI sprites.** Gemini's image model was the only sprite generator, so weapons always use the player's own doodle, cut out of its white background with an outline and glow. `weapon.spriteUrl` is kept for a future image provider.
+- **AI sprites are optional.** `gen_sprite` stores xAI art in `weapon.spriteUrl`. Without it (no key, failure, or too slow), weapons use the player's own doodle, cut out of its white background with an outline and glow.
 
 ### Fallbacks (round never stalls)
 | Missing at Reveal | Where | Fallback |
@@ -312,7 +312,7 @@ A voiced announcer on the shared screen that riffs on players' names and their w
 - Prompts live only in `server/src/prompts/`. The client never imports them.
 
 ### Known open questions for M3
-- **Sprites:** none generated (no image provider since Gemini was removed). The shared screen cuts the doodle out of its white background at load time (`packages/engine/src/cutout.ts`).
+- **Sprites:** xAI art inline in `weapon.spriteUrl` (~100 KB JPEG data URL, no S3), otherwise the doodle. The shared screen cuts either one out of its white background at load time (`packages/engine/src/cutout.ts`).
 - **S3 uploads.** `server/src/lib/s3.ts` is a stub that throws, and nothing calls it any more: sounds are stored inline and there are no generated sprites. Only needed if an image provider comes back. To implement it, sign SigV4 with `@noble/hashes`, or call a tiny Lambda that hands out presigned PUT URLs.
 - **Model IDs** in `server/src/config.ts` are placeholders. Check them against Google's current model list.
 - **Who triggers generation.** The brief has the controller call the procedures right after `submit_drawing`. A sturdier option is for `submit_drawing` to insert rows into three one-shot schedule tables bound to the procedures. Generation would then still run if a phone locks mid-round.
@@ -494,12 +494,12 @@ the controller during a pulse (stops). iPhones should show the damage border.
 ### Drawing to 2D weapon images
 
 `RUN_SPRITE_GENERATION = true` in `client/src/routes/play/draw.ts` sends each
-nonempty submitted drawing to the server's `gen_sprite` procedure. Gemini
-(`gemini-2.5-flash-image`) turns the doodle into filled, outlined, cel-shaded 2D
+nonempty submitted drawing to the server's `gen_sprite` procedure. xAI image editing
+(`grok-imagine-image`, ~$0.02 and ~8 s per image, ~100 KB JPEG) turns the doodle into filled, outlined, cel-shaded 2D
 weapon art while preserving its position, silhouette and colors. This runs
 independently of spec generation, so gameplay continues using drawing features.
 
-Set `GEMINI_API_KEY` in `.env`, publish the updated server, and load the key with
+Set `XAI_API_KEY` in `.env`, publish the updated server, and load the key with
 `corepack pnpm tsx scripts/set-secrets.ts` (append `maincloud` for cloud). Regenerate
 bindings with `corepack pnpm stdb:generate` and rebuild/reload the client. The key
 stays in the private secrets table. Sprite images are stored inline in

@@ -17,7 +17,7 @@ export interface Connected {
  * during dev without sharing an identity. Tokens persist in localStorage → reconnecting
  * phones keep their player row + color.
  */
-export function connect(role: 'screen' | 'play' | 'solo-screen' | 'solo-play' | `solo-bot-${number}`): Promise<Connected> {
+export function connect(role: 'screen' | 'play'): Promise<Connected> {
   const tokenKey = `doodle.token.${role}:${URI}:${DB}`;
   let saved: string | undefined;
   try { saved = localStorage.getItem(tokenKey) ?? undefined; } catch { /* private mode */ }

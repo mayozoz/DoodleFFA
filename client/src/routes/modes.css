@@ -2,7 +2,7 @@
 .mode-brand { color: #bda8ff; text-decoration: none; font-size: 12px; letter-spacing: .18em; font-weight: 900; }
 .mode-page h1 { font-size: clamp(32px, 5vw, 56px); margin: 8px 0 0; }
 .mode-page > p { color: var(--muted); margin: 0; }
-.mode-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; width: min(800px, 100%); margin: 16px 0; }
+.mode-options { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; width: min(420px, 100%); margin: 16px 0; }
 .mode-card { display: flex; flex-direction: column; align-items: flex-start; gap: 14px; padding: 30px; color: var(--fg); text-align: left; text-decoration: none; background: #ffffff08; border: 2px solid #ffffff20; border-radius: 24px; transition: border-color 150ms, transform 150ms; }
 .mode-card:hover, .mode-card:focus-visible { border-color: #bda8ff; transform: translateY(-3px); }
 .mode-symbol { font-size: 44px; color: #bda8ff; }

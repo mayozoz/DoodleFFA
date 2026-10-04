@@ -11,6 +11,7 @@ vi.mock('spacetimedb/server', () => ({
   t: { string: () => ({}), byteArray: () => ({}), f32: () => ({}) },
 }));
 import { prepareWeapon } from '../src/reducers/draw';
+import { SPEC_WAIT_S } from '../src/balance';
 const prepare = prepareWeapon as unknown as (ctx: unknown) => void;
 
 function setup() {
@@ -61,6 +62,19 @@ describe('post-drawing preparation', () => {
     const spec = storeWeapon({ ...MYSTERY_STICK, name: 'AI weapon' });
     s.setWeapon({ ...s.weapon, spec, status: 'ready' }); prepare(s.ctx);
     expect(s.weapon.spec).toBe(spec); expect(s.weapon.status).toBe('ready');
+  });
+  it('waits for an AI weapon that is still being designed', () => {
+    const s = setup(); enterPhase(s.ctx, s.room, 'drop');
+    s.setWeapon({ ...s.weapon, status: 'generating' });
+    expect(() => prepare(s.ctx)).toThrow('weapon still generating');
+    expect(s.weapon.spec).toBe('');
+  });
+  it('locks in the shape-based weapon once the wait runs out', () => {
+    const s = setup(); enterPhase(s.ctx, s.room, 'drop');
+    s.setWeapon({ ...s.weapon, status: 'generating' });
+    (s.ctx as any).timestamp = new Timestamp(s.room.phaseStartedAt.microsSinceUnixEpoch + BigInt(SPEC_WAIT_S * 1e6));
+    prepare(s.ctx);
+    expect(s.weapon.status).toBe('fallback'); expect(s.weapon.spec).not.toBe('');
   });
   it('rejects finalization outside preparation', () => {
     const s = setup(); expect(() => prepare(s.ctx)).toThrow('drawing is not ready');

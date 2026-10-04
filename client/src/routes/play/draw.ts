@@ -13,8 +13,8 @@ const COLORS = [
   ['Pink', '#ec4899'], ['Brown', '#92400e'], ['Cream', '#fde4b2'],
 ] as const;
 const SIZE = 512; // canvas resolution sent to the server
-/** M3: flip on to kick off the hidden generation procedures after submit. */
-export const RUN_GENERATION = false;
+/** Kick off the hidden AI weapon design (gen_spec → gen_sfx) after submit. */
+export const RUN_GENERATION = true;
 /** Sound generation can run independently of spec and sprite generation. */
 export const RUN_SFX_GENERATION = true;
 /** Doodle → polished 2D art, independent of gameplay spec generation. */

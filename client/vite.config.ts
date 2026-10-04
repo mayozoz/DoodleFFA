@@ -1,10 +1,13 @@
 import { networkInterfaces } from 'node:os';
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
 
 // Phones use the same origin as the game; Vite forwards the database WebSocket locally.
-export default defineConfig({
+// STDB_LOCAL_URL (repo .env) points that proxy at a local SpacetimeDB on a non-default port.
+export default defineConfig(({ mode }) => ({
   envDir: '..',
-  server: { port: 5173, proxy: { '/v1': { target: 'http://127.0.0.1:3000', ws: true } } },
+  server: { port: 5173, proxy: { '/v1': {
+    target: loadEnv(mode, '..', '').STDB_LOCAL_URL?.trim() || 'http://127.0.0.1:3000', ws: true,
+  } } },
   plugins: [{
     name: 'local-party-address',
     configureServer(server) {
@@ -22,4 +25,4 @@ export default defineConfig({
     },
   }],
   build: { target: 'es2022' },
-});
+}));

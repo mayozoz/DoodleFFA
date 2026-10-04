@@ -3,13 +3,12 @@ import { connect } from '../../net/connection';
 import { syncFromPhaseStart } from '../../net/clock';
 import { mountCountdown } from '../../ui/countdown';
 import { Arena } from './arena';
-import { lobbyOverlay, type SoloLobbyState } from './lobby';
+import { lobbyOverlay } from './lobby';
 import { resultsOverlay } from './results';
 import { mountScreenDebug } from './debug-status';
 import { mountScoreboard } from './scoreboard';
 import { mountReveal } from './reveal';
 import { mountCommentator } from './commentator';
-import { mountSoloBots } from '../solo/bots';
 
 // Shared screen (/screen). Creates a room, subscribes to everything public for it, and
 // renders. It never simulates — positions come from `fighter` rows, ~100 ms behind.
@@ -19,14 +18,13 @@ const LABEL: Partial<Record<Phase, string>> = {
   drop: 'Spin for your special · learn your weapon · deploy!',
 };
 
-export async function mount(el: HTMLElement, solo = new URLSearchParams(location.search).has('solo')) {
+export async function mount(el: HTMLElement) {
   el.innerHTML = '<div class="center" role="status"><h1>Creating your party room…</h1><p>Your phone join code will appear here.</p></div>';
-  const { conn, identity } = await connect(solo ? 'solo-screen' : 'screen');
+  const { conn, identity } = await connect('screen');
   el.innerHTML = `<div id="stage" style="position:fixed;inset:0"></div><div id="overlay" style="position:fixed;inset:0;pointer-events:none"><div class="center" role="status"><h1>Preparing your room…</h1></div></div>`;
   const overlay = el.querySelector<HTMLDivElement>('#overlay')!;
   let arena: Arena | null = null;
   const arenaReady = Arena.create(el.querySelector<HTMLDivElement>('#stage')!, conn);
-  const soloState: SoloLobbyState | null = solo ? { botIds: new Set(), ready: false } : null;
 
   let code = '';
   let phase: Phase | null = null;
@@ -42,7 +40,7 @@ export async function mount(el: HTMLElement, solo = new URLSearchParams(location
     overlay.innerHTML = '';
     arena?.setPhase(phase);
     commentator?.setPhase(phase);
-    if (phase === 'lobby') cleanup = lobbyOverlay(overlay, conn, code, soloState, async () => { await arenaReady; await conn.reducers.startRound({}); });
+    if (phase === 'lobby') cleanup = lobbyOverlay(overlay, conn, code, async () => { await arenaReady; await conn.reducers.startRound({}); });
     else if (phase === 'results') {
       const a = resultsOverlay(overlay, conn, code), b = mountScoreboard(overlay, conn, code);
       cleanup = () => { a(); b(); };
@@ -73,14 +71,6 @@ export async function mount(el: HTMLElement, solo = new URLSearchParams(location
   const useRoom = (roomCode: string) => {
     if (code) return;
     code = roomCode;
-    if (soloState) {
-      void mountSoloBots(code, id => { soloState.botIds.add(id); soloState.refresh?.(); }).then(stop => {
-        soloState.ready = true; soloState.refresh?.();
-        window.addEventListener('pagehide', stop, { once: true });
-      }).catch(() => {
-        soloState.error = 'Could not connect your bots. Reload to retry.'; soloState.refresh?.();
-      });
-    }
     mountScreenDebug(conn, code);
     commentator = mountCommentator(conn, code);
     arena?.setRoom(code);

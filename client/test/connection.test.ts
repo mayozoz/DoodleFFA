@@ -60,8 +60,8 @@ it('does not retry unrelated connection failures', async () => {
   expect(mocks.attempts).toHaveLength(1);
 });
 
-it('isolates solo host, controller and bots from multiplayer identities', async () => {
-  const roles = ['screen', 'play', 'solo-screen', 'solo-play', 'solo-bot-0', 'solo-bot-1', 'solo-bot-2'] as const;
+it('isolates the screen and controller identities', async () => {
+  const roles = ['screen', 'play'] as const;
   for (const [index, role] of roles.entries()) {
     const pending = connect(role);
     expect(mocks.attempts[index].token).toBeUndefined();

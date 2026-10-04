@@ -191,8 +191,6 @@ input, select { font-size: 16px; } /* iOS zooms into inputs smaller than 16px */
 .lobby-join #start:disabled { opacity: .4; }
 .lobby-join #copy-status { min-height: 18px; margin: 6px 0; }
 
-.lobby-solo { grid-template-columns: 1fr; width: 100%; }
-.lobby-solo #players { margin: 12px 0; }
 
 .room-lobby { height: 100%; overflow-y: auto; pointer-events: auto; align-content: center; }
 .screen-connection-notice { position: fixed; bottom: 10px; left: 50%; transform: translateX(-50%); z-index: 100; max-width: 90vw; padding: 12px 20px; border-radius: 12px; background: #542739; color: #fff; }
