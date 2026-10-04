@@ -127,9 +127,12 @@ MHacks 2026
   schema forces the exact shape, so we never parse free text.
 - `asi1-mini` (fast text model): writes short, punchy commentator lines (KOs, final duel, winner).
 - Weapon Smith uAgent (agents/weapon_smith/, Python): the same prompt and schema wrapped as a
-  Fetch.ai agent with a REST endpoint. This lets the weapon designer run as an independent agent
-  on the Fetch.ai network later, with no game changes. Its contract is auto-exported from the
-  TypeScript source so the two can't drift apart.
+  Fetch.ai agent. The game can use it as its weapon designer (SPEC_PROVIDER=agent): the game server
+  calls the agent's authenticated REST endpoint, and the agent calls ASI:One and checks and
+  balances the result with the game's own TypeScript rules. Live test: about 3.6 s per weapon.
+- The same agent also takes text requests over Fetch.ai's chat protocol (ACP 0.3.0): "forge me an
+  ice spear" returns a balanced weapon. Its contract is auto-exported from the TypeScript source
+  so the two can't drift apart.
 - Connection: the gen_spec procedure sends the PNG -> ASI:One returns JSON -> validate ->
   balance formula -> the weapon row is saved -> every screen and phone updates instantly.
 
@@ -315,6 +318,10 @@ Cost and usage (we planned around credits)
 5. CHALLENGES
 -------------
 
+Hosting the Fetch.ai agent
+- SpacetimeDB refuses to call private or localhost addresses, so the game server couldn't reach the
+  agent on a laptop. We exposed it through a Cloudflare tunnel (real hosting is the next step).
+
 Finding an image-to-image AI we could actually use
 - ASI:One's image endpoint is text-only: it ignores the input doodle, so it couldn't "upgrade" a
   drawing.
@@ -368,4 +375,8 @@ Teamwork and integration
   retry quietly for up to 8 s from the start of Drop (SPEC_WAIT_S in server/src/balance.ts), then
   falls back to the shape-based weapon.
 - Weapon art (xAI), weapon sounds (ElevenLabs) and the commentator are ON.
+- Weapon design currently goes through the Weapon Smith agent (SPEC_PROVIDER=agent), reached through
+  a temporary Cloudflare tunnel. If the tunnel or agent is down, the game falls back to the
+  shape-based weapon. To go back to calling ASI:One directly, set SPEC_PROVIDER=asi1 in .env and
+  rerun scripts/set-secrets.ts.
 - Deployment to S3 + CloudFront and Maincloud is planned but not done yet.
