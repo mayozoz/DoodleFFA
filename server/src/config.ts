@@ -1,11 +1,12 @@
-// External service config. Model IDs move fast — verify against provider docs before M3.
+// External service configuration. Credentials and game provider selection are private DB values.
 
 /**
  * Which provider answers gen_spec. ASI:One (Fetch.ai) is the only LLM provider; validation,
  * balance and fallbacks don't care where the JSON came from.
- * Phase 2 adds 'agent' (the Weapon Smith uAgent in agents/weapon_smith/).
+ * 'agent' uses the Weapon Smith uAgent in agents/weapon_smith/.
  */
-export type SpecProvider = 'asi1';
+export type SpecProvider = 'asi1' | 'agent';
+// Default for the offline prompt lab only. The game opts in via private SPEC_PROVIDER=asi1 or agent.
 export const SPEC_PROVIDER: SpecProvider = 'asi1';
 
 export const MODELS = {
@@ -51,6 +52,9 @@ export const COMMENTARY = {
 
 /** Keys expected in the private `secrets` table (set via set_secret). */
 export const SECRET_KEYS = [
+  'SPEC_PROVIDER',
+  'AGENT_URL',
+  'AGENT_SHARED_SECRET',
   'ASI_ONE_API_KEY',
   'XAI_API_KEY',
   'ELEVENLABS_API_KEY',

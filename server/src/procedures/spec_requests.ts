@@ -8,6 +8,8 @@ export interface SpecRequest {
   pngBase64: string;
   featuresJson: string;
   systemPrompt: string;
+  flavor?: string;
+  seed?: number;
 }
 
 export interface HttpCall {
@@ -41,3 +43,18 @@ export const asi1Request = (key: string, r: SpecRequest): HttpCall => ({
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const asi1Text = (json: any): unknown => json?.choices?.[0]?.message?.content;
+
+/** Existing authenticated Weapon Smith REST contract. URL is private server configuration. */
+export function agentRequest(key: string, r: SpecRequest, endpoint: string): HttpCall {
+  if (!/^https?:\/\/[^\s/@?#]+(?::[0-9]+)?(?:\/[^\s?#]*)?$/.test(endpoint)) throw new Error('Invalid agent URL');
+  return {
+    url: `${endpoint.replace(/\/$/, '')}/spec`,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token: key, png_base64: r.pngBase64, features_json: r.featuresJson, flavor: r.flavor ?? '', seed: r.seed ?? 0 }),
+  };
+}
+export function agentText(json: unknown): unknown {
+  const r = json as { error?: string; weapon_json?: unknown } | null;
+  if (r?.error) throw new Error('Weapon Smith rejected generation');
+  return r?.weapon_json;
+}

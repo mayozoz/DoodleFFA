@@ -13,7 +13,8 @@ const COLORS = [
   ['Pink', '#ec4899'], ['Brown', '#92400e'], ['Cream', '#fde4b2'],
 ] as const;
 const SIZE = 512; // canvas resolution sent to the server
-/** Kick off the hidden AI weapon design (gen_spec → gen_sfx) after submit. */
+/** Kick off the hidden AI weapon design (gen_spec → gen_sfx) after submit. The server only
+ *  calls a provider when its private SPEC_PROVIDER secret is asi1 or agent. */
 export const RUN_GENERATION = true;
 /** Sound generation can run independently of spec and sprite generation. */
 export const RUN_SFX_GENERATION = true;
@@ -160,7 +161,7 @@ export const drawView: View = (ctx) => {
       // (only the ?debug overlay lists them while they run).
       // Let sound generation use the finished spec's custom prompt when available.
       void debug.track('gen_spec', ctx.conn.procedures.genSpec({})).catch(() => {}).then(() => {
-        void debug.track('gen_sfx', ctx.conn.procedures.genSfx({})).catch(() => {});
+        if (RUN_SFX_GENERATION) void debug.track('gen_sfx', ctx.conn.procedures.genSfx({})).catch(() => {});
       });
     } else if (RUN_SFX_GENERATION) {
       void debug.track('gen_sfx', ctx.conn.procedures.genSfx({})).catch(() => {});

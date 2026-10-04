@@ -14,3 +14,8 @@ client/src/module_bindings/*
 
 # Blender auto-backups
 *.blend1
+
+# Agent identity and persistent chat deduplication state
+private_keys.json
+*_data.json
+__pycache__/

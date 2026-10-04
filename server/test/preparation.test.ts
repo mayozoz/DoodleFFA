@@ -34,7 +34,7 @@ describe('post-drawing preparation', () => {
     const s = setup();
     const db = s.ctx.db as any;
     db.player.identity.update({ ...s.player, totalDamage: 750 });
-    for (const name of ['drawing', 'doodle', 'weapon', 'weaponVoice', 'fighter', 'input', 'projectile', 'abilityObject', 'fxEvent']) {
+    for (const name of ['generation', 'drawing', 'doodle', 'weapon', 'weaponVoice', 'fighter', 'input', 'projectile', 'abilityObject', 'fxEvent']) {
       db[name] = { player: { delete: () => {} }, roomCode: { delete: () => {} } };
     }
     enterPhase(s.ctx, s.room, 'draw');

@@ -12,6 +12,7 @@ class SpecRequest(Model):
     png_base64: str
     features_json: str = "{}"
     flavor: str = ""
+    seed: int = 0
 
 
 class SpecResponse(Model):

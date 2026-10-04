@@ -148,7 +148,9 @@ export function validateWeaponSpec(input: unknown, fallback: WeaponSpec): Valida
   }
   if (!raw || typeof raw !== 'object') return { spec: fallback, issues: ['input: not an object, full fallback'] };
   // Accept either `{ weapon: {...} }` or the weapon object itself.
-  const r = ('weapon' in raw ? (raw as { weapon: unknown }).weapon : raw) as Record<string, unknown>;
+  const candidate = 'weapon' in raw ? (raw as { weapon: unknown }).weapon : raw;
+  if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) return { spec: fallback, issues: ['input: invalid weapon object, full fallback'] };
+  const r = candidate as Record<string, unknown>;
 
   const archetype = isOneOf(ARCHETYPES, r.archetype) ? r.archetype : fallback.archetype;
   if (archetype !== r.archetype) issues.push(`archetype: "${String(r.archetype)}" invalid`);

@@ -287,13 +287,15 @@ A voiced announcer on the shared screen that riffs on players' names and their w
 - **Fallback:** if `character.glb` fails to load, both `/screen` and `/dev/weapons` use the 2D rig and the Pixi grid.
 - **Playground flags:** `/dev/weapons?pose=swing&t=1.5&noweapon&run` freezes the body at a point in the attack (`t` 0–1 wind-up, 1–2 strike, 2–3 recover), hides the weapon, and turns on running. Use these to tune poses.
 
-### LLM provider: ASI:One only
-- All language-model work goes to **ASI:One (Fetch.ai)**. Weapon specs use `asi1`, which accepts the doodle image. Commentary lines use `asi1-mini`.
+### AI providers and the Fetch.ai Weapon Smith
+- Language-model work goes to **ASI:One (Fetch.ai)**: weapon specs use `asi1`, which accepts the doodle image; commentary lines use `asi1-mini`.
+- **Spec provider is a private secret.** Set `SPEC_PROVIDER=asi1` (with `ASI_ONE_API_KEY`) to call ASI:One directly, or `SPEC_PROVIDER=agent` with `AGENT_URL` and `AGENT_SHARED_SECRET` to go through the Weapon Smith uAgent. Blank or unknown disables spec generation, so weapons come from the drawing's shape (`config.ts → SPEC_PROVIDER` is only the prompt lab's default).
+- **`AGENT_URL` must be public.** SpacetimeDB refuses to connect to localhost, LAN and other private addresses, so a local agent needs a tunnel (for example `cloudflared tunnel --url http://127.0.0.1:8001`) or real hosting.
+- All spec responses go through the canonical validator and balance rules before storage. Requests run in procedures outside transactions. Per-round claims (the private `generation` table) prevent duplicate calls, and snapshot guards discard stale responses.
+- "See my weapon" waits up to `SPEC_WAIT_S` (8 s from the start of Drop, `server/src/balance.ts`) for an in-flight spec, then locks in the shape-based one.
+- Strict JSON output: `SPEC_JSON_SCHEMA` in `server/src/prompts/spec.v1.ts` follows OpenAI-style strict mode. `server/test/spec-schema.test.ts` keeps it valid and matched to the WeaponSpec fields.
+- Weapon Smith also supports text weapon creation over ACP 0.3.0 (acknowledgements, stateless sessions, bounded deduplication). Registration and ASI discovery need deployment/account verification. See [Weapon Smith instructions](agents/weapon_smith/README.md). Run `pnpm agents:schema` after changing the prompt or schema.
 - Weapon art (image to image) uses **xAI** `grok-imagine-image` (see "Drawing to 2D weapon images"). Gemini and Bedrock were tried and dropped: Gemini's image model has no free quota, and the AWS account isn't allowlisted for Bedrock.
-- `SPEC_PROVIDER` in `server/src/config.ts` is `'asi1'`. The request builder lives in `server/src/procedures/spec_requests.ts`, shared with `pnpm lab`.
-- Strict JSON output: `SPEC_JSON_SCHEMA` in `server/src/prompts/spec.v1.ts` follows OpenAI-style strict mode: `additionalProperties: false` everywhere and every key in `required`. `server/test/spec-schema.test.ts` keeps it valid and matched to the WeaponSpec fields.
-- `spacetime logs` shows `[gen] spec asi1/spec.v1 <player>: 3.4s, 1 field(s) fixed` per weapon.
-- The Fetch.ai **Weapon Smith agent** (`agents/weapon_smith/`) wraps the same prompt and schema behind a REST endpoint, ready for Phase 2 (`SPEC_PROVIDER = 'agent'`). Run `pnpm agents:schema` after any prompt or enum change to keep it in sync.
 - **AI sprites are optional.** `gen_sprite` stores xAI art in `weapon.spriteUrl`. Without it (no key, failure, or too slow), weapons use the player's own doodle, cut out of its white background with an outline and glow.
 
 ### Fallbacks (round never stalls)
