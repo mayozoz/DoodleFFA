@@ -1,9 +1,11 @@
-import { Application, Container, Graphics, Texture, type Sprite } from 'pixi.js';
+import { Application, Container, Graphics, Sprite, Texture } from 'pixi.js';
 import {
   ARCHETYPE_MODULES, Character, Character3D, Feedback, Interpolator, STAGE, Stage3D, StageGrid, Tweener,
   createWeaponSprite, drawMarker, ease, loadCharacterAsset, loadCutout, motionFeel, type CharacterAsset,
 } from '@doodle/engine';
-import { DEFAULT_SWING, MAX_HP, arenaExtents, colorForSlot, type Marker, type Phase, type StoredWeapon } from '@doodle/spec';
+import { DEFAULT_SWING, MAX_HP, arenaExtents, colorForSlot, type Marker, type Phase, type ProjectileMeta, type StoredWeapon } from '@doodle/spec';
+import { PROJECTILE } from '../../../../server/src/balance';
+import { serverNowMs } from '../../net/clock';
 import type { DbConnection } from '../../module_bindings';
 import { hexToNum } from '../../ui/theme';
 
@@ -30,6 +32,17 @@ interface FighterView {
 
 const DEATH_FADE_S = 0.9;
 
+/** One rendered projectile row: a glowing shot, or the owner's weapon flying (throw). */
+interface ProjectileView {
+  view: Container;
+  shadow: Graphics | null;
+  interp: Interpolator;
+  meta: ProjectileMeta;
+  owner: string;
+  expiresMs: number;
+  spin: number;
+}
+
 /**
  * Shared-screen arena. With the 3D character: three.js draws floor grid + bodies on a canvas
  * underneath; this Pixi canvas (transparent) draws weapons, fx, tags, storm and markers on top,
@@ -46,6 +59,8 @@ export class Arena {
   private markers = new Container();
   private actors = new Container();
   private fx = new Container();
+  private shots = new Container();
+  private projectiles = new Map<bigint, ProjectileView>();
   private numbers = new Container();
   private tweener = new Tweener();
   private feedback: Feedback;
@@ -64,7 +79,7 @@ export class Arena {
     this.ground.addChild(this.edge, this.storm, this.markers);
     if (stage3d) this.ground.scale.y = Stage3D.groundScaleY;
     else this.world.addChild(this.grid.view);
-    this.world.addChild(this.ground, this.actors, this.fx, this.numbers);
+    this.world.addChild(this.ground, this.actors, this.shots, this.fx, this.numbers);
     app.stage.addChild(this.world);
     this.feedback = new Feedback(this.world, this.tweener, this.numbers);
     app.ticker.add((t) => this.frame(t.deltaMS / 1000));
@@ -98,6 +113,7 @@ export class Arena {
       // Round boundary: drop every fighter and every weapon texture, so nobody's old doodle
       // can show up next round.
       this.clearFighters();
+      for (const id of [...this.projectiles.keys()]) this.removeProjectile(id);
       for (const tex of this.textures.values()) tex.destroy(true);
       this.textures.clear();
     }
@@ -132,10 +148,22 @@ export class Arena {
         this.feedback.shake(2 + weight * 10);
         this.feedback.damageNumber(x, y, ev.value);
         // TODO(M1): flash the victim — needs victim id on the event (add `target` column).
+      } else if (ev.type === 'shockwave') {
+        // slam / lobbed-shot landing: ring on the ground (ground layer is foreshortened like the 3D floor)
+        this.shockwave(ev.x, ev.y, ev.value, ev.owner.toHexString());
       } else if (ev.type === 'death') {
         // TODO(M1): confetti in the dead player's color.
       }
     });
+
+    c.db.projectile.onInsert((_e, p) => { if (mine(p.roomCode)) this.addProjectile(p); });
+    c.db.projectile.onUpdate((_e, _o, p) => {
+      const v = this.projectiles.get(p.id);
+      if (!v) return;
+      v.interp.push(p.x, p.y, Math.atan2(p.vy, p.vx));
+      try { v.meta = JSON.parse(p.hits) as ProjectileMeta; } catch { /* keep last */ }
+    });
+    c.db.projectile.onDelete((_e, p) => this.removeProjectile(p.id));
 
     // When a weapon row changes (fallback/AI spec, sprite URL), rebuild that fighter's weapon.
     c.db.weapon.onUpdate((_e, _o, w) => { if (mine(w.roomCode)) void this.refreshWeapon(w.player.toHexString()); });
@@ -221,13 +249,95 @@ export class Arena {
   private playAttack(v: FighterView, facing: number) {
     if (!v.weapon || v.dead) return;
     const mod = ARCHETYPE_MODULES[v.stored.spec.archetype];
-    const feel = motionFeel(v.stored.spec.motion);
+    const feel = motionFeel(v.stored.spec.motion, v.stored.spec.archetype);
     void v.body3d?.attack(v.stored.spec.archetype, feel, this.tweener);
     void mod.play(v.weapon, {
       spec: v.stored.spec, stats: v.stored.stats, feel,
       tweener: this.tweener, unit: this.unit, fxLayer: this.fx, facing,
+      from: v.last ?? undefined,
+      project: (x, y, h = 0) => this.toScreen(x, y, h),
     });
     // TODO(M4): play weapon sound (audio/sfx.ts) using row.sfxUrl or archetype preset.
+  }
+
+  private shockwave(x: number, y: number, radius: number, ownerHex: string) {
+    const owner = [...this.conn.db.player.iter()].find((p) => p.identity.toHexString() === ownerHex);
+    const color = owner ? hexToNum(colorForSlot(owner.colorSlot).hex) : 0xffffff;
+    const g = new Graphics();
+    this.ground.addChild(g);
+    const cx = x * this.unit, cy = y * this.unit; // ground layer is already squashed vertically
+    void this.tweener.to(0.35, (t) => {
+      const r = radius * this.unit * (0.3 + 0.7 * t);
+      g.clear().circle(cx, cy, r).stroke({ color: 0xffffff, width: 6 * (1 - t), alpha: 1 - t })
+        .circle(cx, cy, r * 0.92).stroke({ color, width: 3 * (1 - t), alpha: 1 - t });
+    }).then(() => g.destroy());
+  }
+
+  private addProjectile(p: { id: bigint; owner: { toHexString(): string }; x: number; y: number; vx: number; vy: number; hits: string; expiresAt: { toMillis(): bigint } }) {
+    let meta: ProjectileMeta;
+    try { meta = JSON.parse(p.hits) as ProjectileMeta; } catch { return; }
+    const owner = p.owner.toHexString();
+    const fv = this.fighters.get(owner);
+    const view = new Container();
+    let shadow: Graphics | null = null;
+    if (meta.k === 'throw' && fv?.weapon) {
+      // the owner's actual weapon flies; their hand is empty until it comes back
+      const s = new Sprite(fv.weapon.texture);
+      s.anchor.copyFrom(fv.weapon.anchor);
+      s.scale.set(fv.weapon.scale.x * 0.8);
+      if (fv.weapon.filters) s.filters = [...fv.weapon.filters];
+      view.addChild(s);
+      fv.weapon.visible = false;
+    } else {
+      const player = [...this.conn.db.player.iter()].find((x) => x.identity.toHexString() === owner);
+      const outline = player ? hexToNum(colorForSlot(player.colorSlot).hex) : 0xffffff;
+      const pal = fv?.stored.spec.palette[0];
+      const fill = pal ? hexToNum(pal) : 0xfff3a0;
+      const r = meta.r * this.unit;
+      // weapon's own color, thin outline in the player's color (brief §3)
+      view.addChild(new Graphics().circle(0, 0, r * 1.6).fill({ color: fill, alpha: 0.25 }).circle(0, 0, r).fill(fill).stroke({ color: outline, width: 2 }));
+      if (meta.beh === 'arc') {
+        shadow = new Graphics().ellipse(0, 0, r, r * 0.5).fill({ color: 0x000000, alpha: 0.35 });
+        this.shots.addChild(shadow);
+      }
+    }
+    this.shots.addChild(view);
+    const interp = new Interpolator();
+    interp.push(p.x, p.y, Math.atan2(p.vy, p.vx));
+    this.projectiles.set(p.id, { view, shadow, interp, meta, owner, expiresMs: Number(p.expiresAt.toMillis()), spin: 0 });
+  }
+
+  private removeProjectile(id: bigint) {
+    const v = this.projectiles.get(id);
+    if (!v) return;
+    v.view.destroy({ children: true });
+    v.shadow?.destroy();
+    this.projectiles.delete(id);
+    if (v.meta.k === 'throw') {
+      // weapon is back in hand (unless another throw from the same owner is still out)
+      const stillOut = [...this.projectiles.values()].some((o) => o.owner === v.owner && o.meta.k === 'throw');
+      const fv = this.fighters.get(v.owner);
+      if (fv?.weapon && !stillOut) fv.weapon.visible = true;
+    }
+  }
+
+  private drawProjectiles(dt: number) {
+    const now = serverNowMs();
+    for (const v of this.projectiles.values()) {
+      const s = v.interp.sample();
+      if (!s) continue;
+      let h = 1.0; // shots fly at about hand height
+      if (v.meta.k === 'shot' && v.meta.beh === 'arc') {
+        const life = Math.max(1, v.expiresMs - v.meta.t0);
+        const t = Math.min(1, Math.max(0, (now - v.meta.t0) / life));
+        h = 0.6 + 4 * PROJECTILE.arcPeakHeight * t * (1 - t);
+        const g = this.toScreen(s.x, s.y, 0);
+        v.shadow?.position.set(g.x, g.y);
+      }
+      const p = this.toScreen(s.x, s.y, h);
+      v.view.position.set(p.x, p.y);
+      if (v.meta.k === 'throw') { v.spin += dt * 16; v.view.rotation = v.spin; }
+    }
   }
 
   private removeFighter(hex: string) {
@@ -290,8 +400,9 @@ export class Arena {
       v.char.view.zIndex = feet.y;
     }
     this.actors.sortableChildren = true;
+    this.drawProjectiles(simDt);
     this.stage3d?.render();
-    // TODO(M2): render projectile rows; attach vfx emitters per weapon (vfx/index.ts).
+    // TODO: attach vfx emitters per weapon (vfx/index.ts).
   }
 
   private drawDropMarkers() {

@@ -1,4 +1,4 @@
-import type { MotionSpec } from '@doodle/spec';
+import { strikeS, windUpS, type Archetype, type MotionSpec } from '@doodle/spec';
 import { ease, type Ease } from './tween';
 
 /** Turns the 0–1 motion knobs into concrete animation parameters. Single tuning spot for "feel". */
@@ -14,10 +14,11 @@ export interface MotionFeel {
   idleJiggle: number;   // radians
 }
 
-export function motionFeel(m: MotionSpec): MotionFeel {
+/** Wind-up/strike come from packages/spec/src/attack.ts so the server's hit lands on the strike frame. */
+export function motionFeel(m: MotionSpec, archetype: Archetype = 'swing'): MotionFeel {
   return {
-    windUp: 0.06 + m.weight * 0.2,
-    strike: 0.08 + m.weight * 0.08,
+    windUp: windUpS(archetype, m),
+    strike: strikeS(m),
     recover: 0.12 + (1 - m.elasticity) * 0.1,
     hitPauseMs: 30 + m.weight * 40,
     shake: 2 + m.weight * 10,

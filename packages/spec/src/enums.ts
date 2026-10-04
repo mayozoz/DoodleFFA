@@ -25,7 +25,7 @@ export type Marker = (typeof MARKERS)[number];
 export const PHASES = ['lobby', 'draw', 'drop', 'reveal', 'battle', 'results'] as const;
 export type Phase = (typeof PHASES)[number];
 
-export const WEAPON_STATUS = ['pending', 'ready', 'fallback'] as const;
+export const WEAPON_STATUS = ['pending', 'generating', 'ready', 'fallback'] as const;
 export type WeaponStatus = (typeof WEAPON_STATUS)[number];
 
 /** Effects with no gameplay cost in the balance formula. */

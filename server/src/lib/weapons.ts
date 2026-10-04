@@ -3,12 +3,14 @@ import {
   type DrawingFeatures, type StoredWeapon, type WeaponSpec,
 } from '@doodle/spec';
 import { BALANCE } from '../balance';
-import { SPEC_PROVIDER } from '../config';
-import { SPEC_PROVIDERS } from '../procedures/spec_providers';
 import type { Ctx, RoomRow, WeaponRow } from './ctx';
 
-/** M1: every weapon is the hard-coded swing. Flip to false once gen_spec lands (M3). */
-export const USE_HARDCODED_SWING = true;
+/**
+ * true = every weapon is the hard-coded swing (M1). false = each weapon gets its archetype from
+ * the drawing: the AI spec when generation runs, else the deterministic features-based fallback.
+ * All 8 archetypes have hitboxes + motions now, so this is off.
+ */
+export const USE_HARDCODED_SWING = false;
 
 export const storeWeapon = (spec: WeaponSpec): string =>
   JSON.stringify({ spec, stats: balance(spec, BALANCE) } satisfies StoredWeapon);
@@ -60,7 +62,6 @@ function expectedSteps(ctx: Ctx) {
   const has = (k: string) => !!ctx.db.secrets.key.find(k)?.value;
   const s3 = has('AWS_ACCESS_KEY_ID') && has('AWS_SECRET_ACCESS_KEY') && has('S3_BUCKET');
   return {
-    spec: !USE_HARDCODED_SWING && has(SPEC_PROVIDERS[SPEC_PROVIDER].secret),
     sprite: has('GEMINI_API_KEY') && s3,
     sfx: has('ELEVENLABS_API_KEY') && s3,
   };
@@ -79,7 +80,9 @@ export function dropCanEndEarly(ctx: Ctx, r: RoomRow, elapsedS: number, minS: nu
   for (const p of players) {
     const w = ctx.db.weapon.player.find(p.identity);
     if (!w || w.roomCode !== r.code) return false; // drawing not in yet
-    if (want.spec && !w.spec) return false;
+    // gen_spec marks the weapon 'generating' when it starts and clears it when done or failed,
+    // so Drop waits only for specs that were actually requested.
+    if (w.status === 'generating') return false;
     if (want.sprite && !w.spriteUrl) return false;
     if (want.sfx && !w.sfxUrl) return false;
   }

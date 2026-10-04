@@ -40,7 +40,7 @@ export function mountScreenDebug(conn: DbConnection, code: string) {
         const text = w
           ? `${p.name}: ${w.status} · ${step(!!w.spec, 'spec')} ${step(!!w.spriteUrl, 'sprite')} ${step(!!w.sfxUrl, 'sfx')}`
           : `${p.name}: no drawing yet`;
-        items.push({ level: !w ? 'wait' : w.status === 'pending' ? 'wait' : w.status === 'fallback' ? 'warn' : 'ok', text });
+        items.push({ level: !w ? 'wait' : w.status === 'pending' || w.status === 'generating' ? 'wait' : w.status === 'fallback' ? 'warn' : 'ok', text });
       }
     }
     if (r.phase === 'battle') {

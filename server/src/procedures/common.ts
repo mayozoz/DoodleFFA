@@ -33,6 +33,8 @@ export function loadJob(ctx: PCtx, field: WeaponField): GenJob | null {
     const d = tx.db.drawing.player.find(ctx.sender);
     const w = tx.db.weapon.player.find(ctx.sender);
     if (!d || !w || w[field] !== '') return null;
+    // Tell Drop's early-exit there's a spec on the way (it only waits for requested work).
+    if (field === 'spec' && w.status === 'pending') tx.db.weapon.player.update({ ...w, status: 'generating' });
 
     const secrets: Partial<Record<SecretKey, string>> = {};
     for (const k of SECRET_KEYS) {

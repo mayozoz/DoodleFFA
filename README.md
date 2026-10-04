@@ -221,6 +221,56 @@ The load test checks that the 20 Hz tick holds with 12 clients on Maincloud. If 
   - a **stalled tick** during battle (no fighter updates for over 1 s)
 - Per-room isolation: `tick()` runs each room in its own `try/catch`. One room's error is logged and the other rooms keep running. (Before this, a stale fighter row in one room froze every room.)
 
+### Weapon archetypes (all 8 implemented)
+- **Hit lands on the strike frame, not on the press.** `strikeDelayS(archetype, motion)` in `packages/spec/src/attack.ts` is shared. The server queues each attack (`effects.pa`) and resolves it at that moment. The engine's `motionFeel` uses the same wind-up and strike times, so damage numbers pop as the weapon connects. Slams and beams wind up longer.
+- **Melee hit areas** (`server/src/lib/hitbox.ts`, pure and unit-tested):
+
+  | Type | Hit area |
+  |---|---|
+  | swing | arc in front |
+  | thrust | narrow strip ahead |
+  | slam | circle a little ahead, plus a `shockwave` fx event |
+  | whip | curved strip |
+  | spin | full ring around you |
+  | beam | long, thin strip |
+
+  Reach and width come from the balanced `rangeUnits` and `areaUnits`.
+- **Projectiles** (`stepProjectiles` in `server/src/lib/sim.ts`, tuning in `PROJECTILE` in `balance.ts`):
+  - **shoot** fires `count` shots across `spread_deg`. Behaviors:
+    - **pierce:** passes through, hitting each player once.
+    - **bounce:** reflects off the arena walls twice.
+    - **split:** becomes two shots at ±30° on its first hit, or at 60% of its life.
+    - **homing:** steers toward the nearest enemy.
+    - **arc:** lobbed over everyone, landing in a splash.
+  - **throw:** the weapon itself flies out to its reach and returns to the owner like a boomerang, hitting each player once per leg.
+  - Projectile state is JSON in `projectile.hits` (`ProjectileMeta` in `packages/spec/src/attack.ts`).
+- **Motions** (`packages/engine/src/archetypes/*.ts`): every type has its own sprite motion. Shoot and whip flash at the tip, and beam draws its glowing line in world space through `ctx.project`. The arena draws projectiles in the weapon's own color with a player-color outline, lobbed shots with a ground shadow, the thrown weapon spinning (with the hand empty until it returns), and ground shockwaves.
+- **Which type a weapon gets:** `USE_HARDCODED_SWING = false` (in `server/src/lib/weapons.ts`), so the type comes from the AI spec when generation runs, and otherwise from the features-based fallback. That fallback is crude: a bow drawing becomes a swing, and a squiggle becomes a throw. The AI picks much better.
+- **Still to do:** the on-hit effects other than knockback (burn, slow, chain, lifesteal, pierce), the whip's true rope bend (MeshRope), and per-weapon vfx emitters in the arena.
+- **Playground:** `/dev/weapons` previews shots, throws and shockwaves locally (there's no server there). Pick any archetype from the dropdown.
+
+### Commentator (built)
+A voiced announcer on the shared screen that riffs on players' names and their weapons.
+
+- **Server** (`server/src/procedures/gen_commentary.ts`), `genCommentary({ kind, a, b })`:
+  - Host-only. It builds a snapshot of player names, weapon names, types, effects, and a condition *word* (fresh / bruised / hanging on / knocked out, never a number).
+  - ASI:One `asi1-mini` writes one line from `server/src/prompts/commentary.v1.ts`, and ElevenLabs `eleven_flash_v2_5` speaks it with the "Adam" voice.
+  - It returns the **MP3 bytes directly**, so no S3 is needed. Measured about 1.2–1.3 s from request to audio.
+  - Kinds: `intro`, `color`, `ko` (a = killer, b = victim), `final`, `winner` (a = winner).
+- **Guardrails:**
+  - PG.
+  - Player and weapon names are passed as data, and the prompt tells the model to ignore instructions inside them.
+  - Lines that say "AI", "generated", "prompt", "model", HP, damage, stats or any number (with names blanked out first) are dropped.
+  - Cost guard: at most `COMMENTARY.maxLinesPerRound` (16) lines per room per round, and `color` lines at least `minGapS` (4 s) apart. Tracked in the private `commentary` table.
+  - `COMMENTARY.enabled` in `server/src/config.ts` turns it off globally.
+- **Screen** (`client/src/routes/screen/commentator.ts`):
+  - **Triggers:** intro when Reveal starts; play-by-play every ~7 s of silence in battle; a KO line naming the killer (the last hitter near the victim) and the victim; "final two"; the winner at results.
+  - Big moments jump the queue, one line plays at a time, and stale KO lines are dropped.
+  - A **mute toggle** sits top-left (remembered per device). When muted, the screen doesn't request lines at all, so it costs nothing.
+  - Browser audio is unlocked by the host's Start click. After a screen reload, click the toggle once.
+- **Measured:** about 6 lines in a 4-player round, roughly 100 characters each, so about 600 ElevenLabs characters plus a few hundred LLM tokens per round.
+- **Voice:** `COMMENTARY.voiceId` (Adam, `pNInz6obpgDQGcFmaJgB`). Swap it any time.
+
 ### 3D character
 - **Pipeline:** Mixamo FBX files in `assets-src/character/` are built into `client/public/models/character/character.glb` by `pnpm character:build`, which runs headless Blender.
   - It keeps one armature and the mesh, names the clips (`stickman_run.fbx` → `Run`), and strips forward root motion.
@@ -298,7 +348,31 @@ Add a JSON file in `packages/spec/fixtures/` with the `weapon` object only. Add 
 | | State |
 |---|---|
 | **M1** playable core | Scaffold done. **To do:** victim flash (needs a `target` column on `fx_event`), death confetti, walk dust, controller "you're dead" view, reconnect polish, playtest on 4 devices |
-| **M2** engine breadth | `/dev/weapons`, spec schema, clamps, balance and tests exist; 4 of ~10 fixtures. **To do:** `shoot`/`slam`/`whip` motions, projectiles in `sim.ts`, on-hit effects, `fire`/`sparkles`/`electric` renderers |
+| **M2** engine breadth | All 8 archetypes: hitboxes, projectiles (5 behaviors + throw), motions, strike-frame timing. `/dev/weapons`, spec schema, balance and tests; 4 of ~10 fixtures. **To do:** on-hit effects other than knockback, `fire`/`sparkles`/`electric` renderers in the arena |
 | **M3** hidden AI layer | `extractFeatures` + tests, `secrets`/`set_secret`, procedures with idempotency gates, prompts v1, fallbacks wired at Reveal. **To do:** S3 SigV4, sprite background removal/orientation, confirm model IDs, flip the M1 switches |
 | **M4** feel/polish | Archetype/vfx stubs exist and currently fall back to swing / particle presets |
 | **M5** | Not started (voice vs. video still undecided) |
+
+---
+
+## Backlog (planned, not started)
+
+### Combo attacks
+Landing hits in a row without being hit builds a combo (2 hits = ×2 combo, and so on). Each step raises the damage multiplier.
+
+- **Server** (`server/src/lib/sim.ts`):
+  - Keep `combo` in the attacker's `fighter.effects` JSON.
+  - Damage × `comboMultiplier(n)`.
+  - **What counts as one step:** every hit an attacker lands within one **hit window** counts as a single +1. So a multi-projectile volley, a spin that clips two players, or a chain-lightning bounce all add one step, not several.
+  - **Window length:** the **longest cooldown among the weapons in this round** (max of `stats.cooldown` over the room's weapon rows). Those rows last the whole battle, so the window stays fixed even as players die.
+    - This caps combo speed equally: a fast weapon can't build combos faster than the slowest one. A 0.4 s dagger landing three hits inside a 1.2 s window gets one step, the same as one 1.2 s hammer swing.
+    - When every weapon has the same cooldown, it's exactly one step per attack.
+  - **Window rule:** the window opens on the attacker's first hit and covers `[start, start + window)`. The first hit at or after the end starts the next step and opens a new window.
+  - **What breaks it:** taking damage from *anything* (another player, the storm or sudden death) resets the combo to 0.
+  - **No timeout:** a combo lasts until you're hurt, however long you go between hits.
+  - All constants go in `server/src/balance.ts` (`COMBO`): step and cap. The window isn't a constant; it comes from the round's weapons. Suggested starting point: ×(1 + 0.15·(n−1)), capped at ×1.75.
+  - This adds damage above the 12 DPS-equivalent budget on purpose. It rewards play, not the drawing, so the "weapons are equal" pillar still holds.
+- **Events:** emit an `fx_event` of type `combo` (value = n) when the combo reaches 2 or more, and `combo_break` when a combo of 3 or more is broken. The screen can then react without new tables.
+- **Arena:** a "×3 COMBO" pop above the attacker that grows with n, a glow on their ground ring that intensifies with n, and a shatter effect on combo break.
+- **Scoreboard** (`client/src/routes/screen/scoreboard.ts`): a 🔥×n badge next to the player's name while the combo lasts.
+- **Decided (2026-10-03):** storm and sudden-death damage break a combo. Combos don't time out. Hits inside one hit window count as one step, and the window equals the round's longest weapon cooldown.

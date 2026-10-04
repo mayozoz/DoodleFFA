@@ -1,19 +1,66 @@
 import { colorForSlot, type StoredWeapon } from '@doodle/spec';
 import type { DbConnection } from '../../module_bindings';
+import { playTestSwing, weaponArt } from '../../ui/weapon-art';
+import { drawMarkerSvg } from '../../ui/marker-svg';
 
-/** Winner + their weapon card. TODO(M4): animated card, kill feed recap. */
+/**
+ * Results: a top-3 podium (2nd · 1st · 3rd). Each step shows the player's color, marker, name,
+ * weapon art and weapon name; the blocks rise 3rd → 2nd → 1st and the winner gets a crown and
+ * a test swing. Fewer than 3 players → fewer steps.
+ */
 export function resultsOverlay(el: HTMLElement, conn: DbConnection, code: string): () => void {
   const r = conn.db.room.code.find(code);
-  const winner = [...conn.db.player.iter()].find((p) => p.identity.toHexString() === r?.winner);
-  const w = winner && conn.db.weapon.player.find(winner.identity);
-  const spec = w?.spec ? (JSON.parse(w.spec) as StoredWeapon).spec : null;
-  const color = winner ? colorForSlot(winner.colorSlot).hex : '#fff';
+  const doodles = new Map([...conn.db.doodle.iter()].filter((d) => d.roomCode === code).map((d) => [d.player.toHexString(), d.png]));
+  const ranked = [...conn.db.player.iter()]
+    .filter((p) => p.roomCode === code && p.placement > 0)
+    .sort((a, b) =>
+      a.placement - b.placement
+      || Number(b.identity.toHexString() === r?.winner) - Number(a.identity.toHexString() === r?.winner)
+      || a.colorSlot - b.colorSlot)
+    .slice(0, 3);
+
   el.innerHTML = `
-    <div class="center" style="pointer-events:auto"><div>
-      <h1 style="font-size:64px;color:${color}">${winner ? `${winner.name} wins!` : 'Draw!'}</h1>
-      ${spec ? `<h2>${spec.name}</h2>` : ''}
-      <button id="again">Play again</button>
-    </div></div>`;
+    <div class="center" style="pointer-events:auto">
+      <div class="results">
+        <div class="results-title">${ranked[0] ? `${esc(ranked[0].name)} wins!` : 'Draw!'}</div>
+        <div class="podium"></div>
+        <button id="again">Play again</button>
+      </div>
+    </div>`;
+  const podium = el.querySelector<HTMLDivElement>('.podium')!;
+  if (ranked[0]) el.querySelector<HTMLDivElement>('.results-title')!.style.color = colorForSlot(ranked[0].colorSlot).hex;
+
+  // visual order: 2nd, 1st, 3rd
+  const order = [ranked[1], ranked[0], ranked[2]];
+  const RISE_DELAY = [0.35, 0.7, 0]; // 3rd rises first, then 2nd, then 1st
+  order.forEach((p, slot) => {
+    if (!p) return;
+    const place = slot === 1 ? 1 : slot === 0 ? 2 : 3;
+    const c = colorForSlot(p.colorSlot);
+    const w = conn.db.weapon.player.find(p.identity);
+    const stored = w?.spec ? (JSON.parse(w.spec) as StoredWeapon) : null;
+
+    const step = document.createElement('div');
+    step.className = `podium-step place-${place}`;
+    step.style.setProperty('--c', c.hex);
+    step.style.animationDelay = `${RISE_DELAY[slot]}s`;
+    step.innerHTML = `
+      ${place === 1 ? '<div class="crown">👑</div>' : ''}
+      <div class="art"></div>
+      <div class="pname">${drawMarkerSvg(p.marker, c.hex)}<span>${esc(p.name)}</span></div>
+      <div class="wname">${esc(stored?.spec.name ?? 'Mystery Stick')}</div>
+      <div class="block"><span>${place}</span></div>`;
+    podium.appendChild(step);
+
+    void weaponArt({ spriteUrl: w?.spriteUrl, png: doodles.get(p.identity.toHexString()) }, stored?.spec ?? null, { orient: false }).then((art) => {
+      step.querySelector('.art')!.appendChild(art);
+      // winner shows off once their block has risen
+      if (place === 1) setTimeout(() => playTestSwing(art, stored?.spec.archetype ?? 'swing'), (RISE_DELAY[slot]! + 0.6) * 1000);
+    });
+  });
+
   el.querySelector<HTMLButtonElement>('#again')!.onclick = () => void conn.reducers.startRound({});
   return () => {};
 }
+
+const esc = (s: string) => s.replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[ch]!);

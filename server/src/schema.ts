@@ -158,6 +158,17 @@ export const debugEvent = table(
   },
 );
 
+/** Private: per-room commentator throttle (cost guard). */
+export const commentary = table(
+  { name: 'commentary' },
+  {
+    roomCode: t.string().primaryKey(),
+    round: t.u32(),
+    lines: t.u32(),
+    lastAt: t.timestamp(),
+  },
+);
+
 /** Private schedule table driving tick(). One global row; tick() loops over active rooms. */
 export const tickSchedule = table(
   { name: 'tick_schedule' },
@@ -185,6 +196,6 @@ export const admin = table(
 );
 
 const spacetimedb = schema({
-  room, player, drawing, doodle, weapon, fighter, input, projectile, fxEvent, debugEvent, tickSchedule, secrets, admin,
+  room, player, drawing, doodle, weapon, fighter, input, projectile, fxEvent, debugEvent, commentary, tickSchedule, secrets, admin,
 });
 export default spacetimedb;
