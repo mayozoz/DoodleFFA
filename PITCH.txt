@@ -30,7 +30,7 @@ MHacks 2026
 -------------
 
 2.1 Overview: how the pieces fit together
-- PHONES (controllers): draw, pick abilities, move, attack.
+- PERSONAL DEVICE (controllers): draw, pick abilities, move, attack.
 - BIG SCREEN (shared display): renders the arena, the reveal, the scoreboard and the commentator.
 - GAME SERVER (SpacetimeDB): the single source of truth. It holds all game state, runs the battle
   simulation 20 times a second, and is the only thing that calls the AI services.
@@ -38,8 +38,8 @@ MHacks 2026
     - ASI:One (Fetch.ai): doodle -> weapon rules (JSON), plus commentary lines.
     - xAI Grok Imagine: doodle -> finished weapon art (image to image).
     - ElevenLabs: commentator voice, weapon-name announcements and weapon sound effects.
-- HOSTING: the website (phone and screen pages) is a static site, planned for AWS S3 + CloudFront.
-  The game server runs on SpacetimeDB Maincloud.
+- HOSTING: the website (phone and screen pages) is a static site on AWS S3 + CloudFront at
+  https://doodleffa.tech. The game server runs on SpacetimeDB Maincloud.
 - Everything talks to the game server over one live WebSocket connection. Phones and the screen
   never talk to each other directly; they all subscribe to the same server tables, and updates
   stream to them automatically.
@@ -159,8 +159,19 @@ MHacks 2026
   played in sync with the reveal timing.
 
 2.10 Hosting: AWS + SpacetimeDB Maincloud
+- Domain: doodleffa.tech (and www.doodleffa.tech). The QR code in the lobby links phones to
+  https://doodleffa.tech/play?room=CODE.
 - Website: a static build (HTML/JS/CSS) uploaded to Amazon S3, served worldwide through
-  CloudFront (CDN + HTTPS).
+  CloudFront (CDN + HTTPS). The setup:
+    - S3 bucket: private (all public access blocked). Only CloudFront can read it, through Origin
+      Access Control (OAC).
+    - CloudFront: HTTP redirects to HTTPS. Missing paths (403/404) return index.html with a 200, so
+      the website's own router handles /play, /screen and /dev/weapons.
+    - HTTPS: a free AWS Certificate Manager (ACM) certificate for both names, checked through DNS.
+    - DNS: a Route 53 hosted zone. A and AAAA (IPv6) alias records point the bare domain and www at
+      CloudFront.
+    - Caching: hashed JS/CSS files are cached for a year; index.html is always rechecked, so a
+      new upload shows up right away.
 - Game server: published to SpacetimeDB Maincloud (managed hosting).
 - Why this split: the website is just files, so a CDN is the cheapest and fastest way to serve
   them. Everything live (state, simulation, AI calls) lives in SpacetimeDB.
@@ -249,7 +260,8 @@ MHacks 2026
     - Purpose: real-time multiplayer for 12 phones without writing a separate backend, sockets or
       sync code.
 - AWS (S3 + CloudFront)
-    - Usage: hosting the static website (phone and screen pages) behind a global CDN with HTTPS.
+    - Usage: hosting the static website (phone and screen pages) at doodleffa.tech: S3 (files),
+      CloudFront (global CDN), ACM (free HTTPS certificate) and Route 53 (DNS).
     - Purpose: fast, cheap and reliable loading when 12 people scan the QR code at once.
     - We also tried Amazon Bedrock (Stability image models) for the art step; see Challenges.
 - Google Gemini (tried, not shipped)
@@ -312,7 +324,8 @@ Cost and usage (we planned around credits)
   12-player rounds).
 - ElevenLabs: about 6 commentator lines per round, capped at 16, with a minimum gap between lines.
   Weapon-name intros skip the LLM entirely (just "<player>'s <weapon>!").
-- Static website on S3 + CloudFront: pennies at hackathon scale.
+- Static website on S3 + CloudFront: pennies at hackathon scale. Route 53 is $0.50 a month and
+  the ACM certificate is free.
 
 
 5. CHALLENGES
@@ -331,6 +344,14 @@ Finding an image-to-image AI we could actually use
   account was blocked pending "corporate customer" verification.
 - Solution: xAI Grok Imagine with the MHacks credit. It was tested, integrated and working in a
   live round within the hour, thanks to our provider-agnostic design.
+
+Putting it on a real domain
+- A bare domain (doodleffa.tech, no www) can't point at CloudFront with a normal CNAME record. We
+  moved DNS to Route 53, whose "alias" records can.
+- CloudFront only accepts HTTPS certificates from one AWS region (us-east-1, N. Virginia).
+- The site is one page that picks its screen from the URL, but S3 only knows real files, so a
+  scanned /play?room=CODE link returned AccessDenied. CloudFront now answers missing paths with
+  index.html.
 
 Real-time multiplayer bugs
 - The 20 Hz battle tick was silently rejected by SpacetimeDB's scheduler because of an identity
@@ -379,4 +400,7 @@ Teamwork and integration
   a temporary Cloudflare tunnel. If the tunnel or agent is down, the game falls back to the
   shape-based weapon. To go back to calling ASI:One directly, set SPEC_PROVIDER=asi1 in .env and
   rerun scripts/set-secrets.ts.
-- Deployment to S3 + CloudFront and Maincloud is planned but not done yet.
+- Domain doodleffa.tech is set up: Route 53 DNS, ACM certificate (waiting on validation), private
+  S3 bucket and CloudFront distribution with alias records. Still to do: attach the certificate and
+  domain names to CloudFront, publish the server to Maincloud (pause the idle 20 Hz tick first),
+  then build with VITE_PUBLIC_URL=https://doodleffa.tech and upload to S3.
