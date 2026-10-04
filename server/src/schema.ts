@@ -163,7 +163,7 @@ export const fxEvent = table(
   {
     id: t.u64().primaryKey().autoInc(),
     roomCode: t.string().index('btree'),
-    type: t.string(), // 'hit' | 'death' | 'attack' | 'shockwave' | ...
+    type: t.string(), // 'hit' (owner=attacker) | 'damage' (owner=victim) | 'death' | 'attack' | 'shockwave'
     x: t.f32(),
     y: t.f32(),
     owner: t.identity(),

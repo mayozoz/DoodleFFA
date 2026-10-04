@@ -18,6 +18,14 @@ export function damage(f: FighterRow, amount: number, now: number): number {
   f.hp -= dealt;
   return dealt;
 }
+/**
+ * Phone damage cue (fx 'damage', owner = victim) for a direct hit from another player's ability.
+ * Damage-over-time (burn, poison, drain) and the storm deliberately don't cue — no constant buzzing.
+ */
+function cue(ctx: Ctx, r: RoomRow, victim: FighterRow, dealt: number) {
+  if (dealt > 0) ctx.db.fxEvent.insert({ id: 0n, roomCode: r.code, type: 'damage', x: victim.x, y: victim.y, owner: victim.player, value: dealt, createdAt: ctx.timestamp });
+}
+
 export function segmentDistance(x: number, y: number, ax: number, ay: number, bx: number, by: number) {
   const dx = bx - ax, dy = by - ay;
   const t = Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / (dx * dx + dy * dy || 1)));
@@ -92,7 +100,7 @@ export function activateAbility(ctx: Ctx, r: RoomRow, f: FighterRow, all: Map<st
       moveFighter(ctx, r, f, f.x + ux * T.travelDistance, f.y + uy * T.travelDistance);
       if (id === 'dash') for (const o of enemies) {
         if (segmentDistance(o.x, o.y, ax, ay, f.x, f.y) > hitRadius(o, now) + 0.5) continue;
-        damage(o, GAME.maxHp * T.dashDamageFraction, now);
+        cue(ctx, r, o, damage(o, GAME.maxHp * T.dashDamageFraction, now));
         moveFighter(ctx, r, o, o.x + ux * T.knockbackDistance, o.y + uy * T.knockbackDistance);
       }
       break;
@@ -206,7 +214,7 @@ export function stepAbilityObjects(ctx: Ctx, r: RoomRow, all: Map<string, Fighte
       if (['boomerang', 'hook', 'silence'].includes(d.kind)) {
         if (d.hits?.includes(id) || segmentDistance(o.x, o.y, ax, ay, row.x, row.y) > d.radius + hitRadius(o, now)) continue;
         d.hits!.push(id);
-        if (d.kind === 'boomerang') damage(o, (weapons.get(row.owner.toHexString())?.stats.damagePerHit ?? 300), now);
+        if (d.kind === 'boomerang') cue(ctx, r, o, damage(o, (weapons.get(row.owner.toHexString())?.stats.damagePerHit ?? 300), now));
         if (d.kind === 'silence') { setEffect(o, 'silenced', now + 3); remove = true; }
         if (d.kind === 'hook') {
           if (owner) {
@@ -224,7 +232,7 @@ export function stepAbilityObjects(ctx: Ctx, r: RoomRow, all: Map<string, Fighte
         if (d.kind === 'drain' && owner && owner.hp > 0) owner.hp = Math.min(GAME.maxHp, owner.hp + damage(o, T.drainDps * dt, now));
         if (d.kind === 'bomb') {
           const hits = bombHits.get(d.hits![0]!)!;
-          if (!hits.has(id)) { damage(o, T.blastDamage, now); hits.add(id); }
+          if (!hits.has(id)) { cue(ctx, r, o, damage(o, T.blastDamage, now)); hits.add(id); }
         }
       }
     }

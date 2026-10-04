@@ -216,6 +216,9 @@ function applyHit(wd: World, attackerId: string, o: FighterRow, from: { x: numbe
   // damage() returns what actually landed (0 while the target is Invisible)
   const dmg = damage(o, rollDamage(w.stats.damagePerHit, wd.rand, BALANCE) * mul * boost, wd.seconds);
   if (dmg <= 0) return;
+  // Controller cue (Ethan): owner is the VICTIM. Only damage that actually landed, from another
+  // player, emits this; storm/sudden-death never pass through applyHit.
+  if (attackerId !== o.player.toHexString()) emitFx(wd.ctx, wd.r.code, 'damage', o.x, o.y, o.player, dmg);
   // fx owner = the ATTACKER (screen shake scales with their weapon; commentary needs who hit whom)
   emitFx(wd.ctx, wd.r.code, 'hit', o.x, o.y, attacker?.player ?? o.player, dmg);
   // Knockback: initial speed whose per-tick decaying steps sum to exactly the knockback

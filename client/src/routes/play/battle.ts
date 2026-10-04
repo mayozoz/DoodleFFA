@@ -2,7 +2,7 @@ import { Timestamp } from 'spacetimedb';
 import nipplejs from 'nipplejs';
 import { ABILITIES, ABILITY_TUNING, isAbilityId, MAX_HP, type StoredWeapon } from '@doodle/spec';
 import { secondsLeft } from '../../net/clock';
-import { haptic } from '../../ui/haptics';
+import { mountDamageFeedback } from './damage-feedback';
 import { click, resumeAudio } from '../../audio/sfx';
 import { mountRotateHint } from '../../ui/rotate-hint';
 import type { View } from './types';
@@ -58,7 +58,9 @@ export const battleView: View = (ctx) => {
     void ctx.conn.reducers.setInput(want);
   }, 1000 / SEND_HZ);
 
-  // Every press: local bounce + click, even during cooldown. Server buffers one press.
+  const stopDamageFeedback = mountDamageFeedback(ctx);
+
+  // Every press: local bounce + click. Vibration is reserved for received damage.
   const btn = ctx.el.querySelector<HTMLButtonElement>('#atk')!;
   let active = true;
   const hear = ctx.el.querySelector<HTMLButtonElement>('#hear-weapon')!;
@@ -77,15 +79,10 @@ export const battleView: View = (ctx) => {
     void ctx.conn.reducers.pressAttack({});
   };
 
-  // Damage feedback follows confirmed server HP changes, never attack presses.
-  const onDamage: Parameters<typeof ctx.conn.db.fighter.onUpdate>[0] = (_event, previous, current) => {
-    if (current.player.isEqual(ctx.identity) && current.hp < previous.hp) haptic(50);
-  };
-  ctx.conn.db.fighter.onUpdate(onDamage);
   const special = ctx.el.querySelector<HTMLButtonElement>('#special')!;
   special.onpointerdown = () => {
     if (special.disabled) return;
-    click(); haptic(25);
+    click(); // no vibration: vibration is reserved for damage you take
     void ctx.conn.reducers.pressAbility({});
   };
 
@@ -115,7 +112,7 @@ export const battleView: View = (ctx) => {
   loop();
 
   return () => {
-    ctx.conn.db.fighter.removeOnUpdate(onDamage);
+    stopDamageFeedback();
     active = false;
     clearInterval(sender);
     cancelAnimationFrame(raf);
