@@ -76,6 +76,7 @@ export const joinRoom = spacetimedb.reducer(
       dropX: -1,
       dropY: -1,
       placement: 0,
+      abilityId: 'flash',
     });
   },
 );

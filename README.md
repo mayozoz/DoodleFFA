@@ -337,3 +337,51 @@ request. Late responses are discarded after the round changes, and announcements
 stop at Results. This works with fallback weapon names while spec generation is
 disabled, and with unique generated names when enabled. Republish the server after
 this change so the new procedure and private cache table are available.
+
+### Special abilities
+
+During **Drop**, each player chooses one of 20 special abilities. **Flash** is the
+initial default. The choice locks at Reveal. Each battle starts with two charges;
+activating the ability spends one charge and starts that ability's cooldown. The
+phone's separate special button shows remaining charges and cooldown seconds.
+Presses during cooldown are discarded. Charges reset at the next battle.
+
+`packages/spec/src/abilities.ts` contains the catalogue, cooldowns, durations and
+`ABILITY_TUNING` (damage, ranges and multipliers). `server/src/lib/abilities.ts`
+resolves abilities on the server tick, including status expiration, swept
+projectile collisions, wall collisions, burn/poison and life drain. The public
+`ability_object` table stores zones, traps, projectiles and scheduled nuke blasts.
+The shared arena renders these objects in its ground and weapon layers.
+
+Initial tuning and rules:
+
+- Invisible grants complete damage immunity for 2 seconds, including storm and
+  sudden death damage, and grays the body and weapon.
+- Smoke lasts 4 seconds and prevents auto-aim targeting. Physical hits and area
+  damage still work. Flashbang whites out the shared screen for everyone for 2 seconds.
+- Attack boost grants 40% extra normal attack damage for 5 seconds and immediately
+  costs 10% maximum HP; it can kill a low-health caster.
+- Rage grants 40% extra attack speed for 5 seconds. Weapon boost multiplies weapon
+  size and normal attack reach by 1.6 for 6 seconds. Shrink halves only the body
+  and its collision radius for 6 seconds; weapon size stays unchanged.
+- Silence prevents both normal attacks and specials for 3 seconds. Freeze prevents
+  movement, attacks and specials for 3 seconds; the affected square is ahead of
+  the caster. Silenced/frozen attack requests are discarded.
+- Mini arena lasts 5 seconds. Players touching its boundary are placed inside;
+  walls prevent crossing by movement, flash, dash, hook pulls and knockback.
+- Fire steps lasts 4 seconds, leaving 3-second patches. Fire patches and the
+  4-second fire ring refresh the same 2-second burn at storm DPS. Mushrooms last
+  up to 15 seconds, trigger once, and apply 5 seconds of poison.
+- Life drain lasts 3 seconds, heals only actual damage dealt, and caps health at
+  maximum HP. Boomerang hits each opponent once outward and once returning.
+- Both nukes telegraph and sweep across the arena over 3 seconds, dealing 20%
+  maximum HP once per opponent per activation. Nuke1 expands from the activation
+  position; Nuke2 moves from top to bottom. The caster is excluded from ability damage.
+
+After pulling schema changes, run `pnpm stdb:generate`, publish the updated server
+using the project's normal SpacetimeDB workflow, and rebuild/reload clients.
+Existing databases need a schema migration or a fresh **development** database for
+these new required fields. Generated client bindings are ignored by Git.
+
+Ability tests cover activation limits, cooldowns, collision and effect behavior,
+plus integration with normal attacks, silence, freeze, storm and sudden death.

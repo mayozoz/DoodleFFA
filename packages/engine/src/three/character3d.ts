@@ -35,6 +35,8 @@ const tmpQ = new THREE.Quaternion(), tmpQ2 = new THREE.Quaternion(), tmpV = new 
 /** One player's 3D body: tinted clone, Idle↔Run blend, procedural attack layered on top. */
 export class Character3D {
   readonly root = new THREE.Group();
+  private bodyMaterial: THREE.MeshStandardMaterial;
+  private baseColor: number;
   private model: THREE.Object3D;
   private mixer: THREE.AnimationMixer;
   private idle?: THREE.AnimationAction;
@@ -45,9 +47,11 @@ export class Character3D {
   private runWeight = 0;
 
   constructor(asset: CharacterAsset, color: number) {
+    this.baseColor = color;
     this.model = SkeletonUtils.clone(asset.scene);
     this.model.scale.setScalar(MODEL_SCALE);
     const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.75, metalness: 0 });
+    this.bodyMaterial = mat;
     this.model.traverse((o) => {
       if ((o as THREE.Mesh).isMesh) {
         (o as THREE.Mesh).material = mat;
@@ -73,6 +77,11 @@ export class Character3D {
     const idle = clip('idle'), run = clip('run');
     if (idle) (this.idle = this.mixer.clipAction(idle)).play();
     if (run) { (this.run = this.mixer.clipAction(run)).play(); this.run.setEffectiveWeight(0); }
+  }
+
+  setAppearance(scale: number, invulnerable: boolean, frozen: boolean) {
+    this.root.scale.setScalar(scale);
+    this.bodyMaterial.color.setHex(invulnerable ? 0x888888 : frozen ? 0x88ddff : this.baseColor);
   }
 
   /** game coords → three: (x, 0, y). `facing` is the game angle (radians, +x = 0). */
@@ -122,7 +131,7 @@ export class Character3D {
   }
 
   /** Top of the head (for name tag / HP bar), in game height units. */
-  get headHeight() { return 2.0 * MODEL_SCALE + 0.15; }
+  get headHeight() { return (2.0 * MODEL_SCALE + 0.15) * this.root.scale.y; }
 
   dispose() {
     this.mixer.stopAllAction();

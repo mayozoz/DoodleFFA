@@ -7,3 +7,5 @@ export * from './balance';
 export * from './features';
 export * from './fallback';
 export * from './arena';
+
+export * from './abilities';

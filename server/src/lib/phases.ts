@@ -1,4 +1,4 @@
-import { arenaExtents, mulberry32, stormStartRadius, type Phase } from '@doodle/spec';
+import { ABILITY_TUNING, arenaExtents, mulberry32, stormStartRadius, type Phase } from '@doodle/spec';
 import { GAME, PHASE_SECONDS } from '../balance';
 import { addSeconds } from './time';
 import { applyFallbacks } from './weapons';
@@ -44,6 +44,7 @@ function resetRound(ctx: Ctx, code: string) {
   ctx.db.weapon.roomCode.delete(code);
   ctx.db.fighter.roomCode.delete(code);
   ctx.db.projectile.roomCode.delete(code);
+  ctx.db.abilityObject.roomCode.delete(code);
   ctx.db.fxEvent.roomCode.delete(code);
 }
 
@@ -65,6 +66,7 @@ function spawnFighters(ctx: Ctx, r: RoomRow): Partial<RoomRow> {
     ctx.db.fighter.insert({
       player: p.identity, roomCode: r.code, x, y, facing: 0, hp: GAME.maxHp,
       cooldownReadyAt: ctx.timestamp, lastAttackAt: ctx.timestamp, effects: '{}',
+      abilityId: p.abilityId, abilityCharges: ABILITY_TUNING.charges, abilityReadyAt: ctx.timestamp,
     });
   }
   return { arenaR, stormX: 0, stormY: 0, stormR: stormStartRadius(arenaR) };

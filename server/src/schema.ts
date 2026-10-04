@@ -42,6 +42,7 @@ export const player = table(
     dropY: t.f32(),
     /** 1 = winner, 0 = not placed yet */
     placement: t.u8(),
+    abilityId: t.string(),
   },
 );
 
@@ -97,8 +98,20 @@ export const fighter = table(
     lastAttackAt: t.timestamp(),
     /** JSON { burn?: {dps, until}, slow?: {...}, ... } */
     effects: t.string(),
+    abilityId: t.string(),
+    abilityCharges: t.u8(),
+    abilityReadyAt: t.timestamp(),
   },
 );
+
+/** Persistent ability zones, traps and projectiles; payload is owned by @doodle/spec. */
+export const abilityObject = table({ name: 'ability_object', public: true }, {
+  id: t.u64().primaryKey().autoInc(),
+  roomCode: t.string().index('btree'),
+  owner: t.identity(),
+  x: t.f32(), y: t.f32(),
+  data: t.string(),
+});
 
 /** Private cache: a controller requests only its own spoken weapon name. */
 export const weaponVoice = table(
@@ -122,6 +135,7 @@ export const input = table(
     dx: t.f32(),
     dy: t.f32(),
     attackBuffered: t.bool(),
+    abilityBuffered: t.bool(),
   },
 );
 
@@ -199,6 +213,6 @@ export const admin = table(
 );
 
 const spacetimedb = schema({
-  room, player, drawing, doodle, weapon, weaponVoice, fighter, input, projectile, fxEvent, debugEvent, tickSchedule, secrets, admin,
+  room, player, drawing, doodle, weapon, weaponVoice, fighter, input, projectile, abilityObject, fxEvent, debugEvent, tickSchedule, secrets, admin,
 });
 export default spacetimedb;

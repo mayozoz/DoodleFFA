@@ -1,5 +1,6 @@
+import { Timestamp } from 'spacetimedb';
 import nipplejs from 'nipplejs';
-import { MAX_HP, type StoredWeapon } from '@doodle/spec';
+import { ABILITIES, ABILITY_TUNING, isAbilityId, MAX_HP, type StoredWeapon } from '@doodle/spec';
 import { secondsLeft } from '../../net/clock';
 import { haptic } from '../../ui/haptics';
 import { click, resumeAudio } from '../../audio/sfx';
@@ -16,12 +17,13 @@ export const battleView: View = (ctx) => {
       </div>
       <button id="hear-weapon" style="position:absolute;top:36px;right:12px;z-index:1;font-size:14px;padding:8px 12px">Hear weapon</button>
       <div id="stick" style="position:relative"></div>
-      <div style="display:grid;place-items:center">
+      <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px">
         <button id="atk" style="position:relative;width:38vmin;height:38vmin;border-radius:50%;font-size:28px">
           <svg viewBox="0 0 100 100" style="position:absolute;inset:-8px;width:calc(100% + 16px);height:calc(100% + 16px);rotate:-90deg">
             <circle id="ring" cx="50" cy="50" r="48" fill="none" stroke="#fff" stroke-width="4" pathLength="1" stroke-dasharray="1" stroke-dashoffset="0"/>
           </svg>
         </button>
+        <button id="special" style="font-size:18px;padding:12px 20px;border-radius:16px;min-width:180px">Special · 2/2</button>
       </div>
     </div>`;
 
@@ -64,6 +66,13 @@ export const battleView: View = (ctx) => {
     void ctx.conn.reducers.pressAttack({});
   };
 
+  const special = ctx.el.querySelector<HTMLButtonElement>('#special')!;
+  special.onpointerdown = () => {
+    if (special.disabled) return;
+    click(); haptic(25);
+    void ctx.conn.reducers.pressAbility({});
+  };
+
   // Cooldown ring + HP from our own fighter row.
   const ring = ctx.el.querySelector<SVGCircleElement>('#ring')!;
   const hpFill = ctx.el.querySelector<HTMLDivElement>('#hpfill')!;
@@ -72,8 +81,16 @@ export const battleView: View = (ctx) => {
     const f = ctx.conn.db.fighter.player.find(ctx.identity);
     const w = ctx.conn.db.weapon.player.find(ctx.identity);
     if (f) {
+      const ability = isAbilityId(f.abilityId) ? ABILITIES[f.abilityId] : ABILITIES.flash;
+      const abilityLeft = secondsLeft(f.abilityReadyAt);
+      const effects = JSON.parse(f.effects) as Record<string, { until: number }>;
+      const statusLocked = ['silenced', 'frozen'].some(key => effects[key] && secondsLeft(new Timestamp(BigInt(Math.round(effects[key]!.until * 1e6)))) > 0);
+      special.disabled = f.hp <= 0 || f.abilityCharges === 0 || abilityLeft > 0 || statusLocked;
+      special.style.opacity = special.disabled ? '0.5' : '1';
+      special.textContent = `${ability.name} · ${f.abilityCharges}/${ABILITY_TUNING.charges}${abilityLeft > 0 ? ` · ${Math.ceil(abilityLeft)}s` : statusLocked ? ' · Blocked' : ''}`;
       hpFill.style.width = `${Math.max(0, (f.hp / MAX_HP) * 100)}%`;
-      const cd = w?.spec ? (JSON.parse(w.spec) as StoredWeapon).stats.cooldown : 0.6;
+      const rage = effects.rage && secondsLeft(new Timestamp(BigInt(Math.round(effects.rage.until * 1e6)))) > 0;
+      const cd = (w?.spec ? (JSON.parse(w.spec) as StoredWeapon).stats.cooldown : 0.6) / (rage ? ABILITY_TUNING.attackSpeedMultiplier : 1);
       const left = secondsLeft(f.cooldownReadyAt);
       ring.style.strokeDashoffset = String(Math.min(1, left / cd));
     }

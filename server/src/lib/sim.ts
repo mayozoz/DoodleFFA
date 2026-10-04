@@ -1,4 +1,5 @@
-import { arenaExtents, hashString, mulberry32, rollDamage, stormStartRadius, type StoredWeapon } from '@doodle/spec';
+import { activateAbility, battleGeometry, type BattleGeometry, damage, hasEffect, hitRadius, moveFighter, stepAbilityObjects, stepStatuses, timeSeconds, untargetable } from './abilities';
+import { ABILITY_TUNING, hashString, mulberry32, rollDamage, stormStartRadius, type StoredWeapon } from '@doodle/spec';
 import { BALANCE, GAME } from '../balance';
 import { addSeconds, secondsBetween } from './time';
 import { readWeapon } from './weapons';
@@ -9,6 +10,7 @@ import type { Ctx, FighterRow, RoomRow } from './ctx';
 
 export function stepBattle(ctx: Ctx, r: RoomRow, dt: number) {
   const now = ctx.timestamp;
+  const seconds = timeSeconds(ctx);
   const elapsed = secondsBetween(r.phaseStartedAt, now);
   const rand = mulberry32(r.seed ^ hashString(`${Math.floor(elapsed * GAME.tickHz)}`));
 
@@ -21,43 +23,56 @@ export function stepBattle(ctx: Ctx, r: RoomRow, dt: number) {
     weapons.set(id, readWeapon(ctx.db.weapon.player.find(f.player)));
   }
 
+  stepStatuses(ctx, fighters, dt);
+
+  const geometry = battleGeometry(ctx, r);
+
   // 1. Movement (clamped to the screen-shaped arena rectangle)
-  const { hw, hh } = arenaExtents(r.arenaR);
-  const mx = hw - GAME.hitRadius, my = hh - GAME.hitRadius;
   for (const [id, f] of fighters) {
     const input = ctx.db.input.player.find(f.player);
-    if (!input) continue;
+    if (!input || f.hp <= 0 || hasEffect(f, 'frozen', seconds)) continue;
     const speed = GAME.moveSpeed * weapons.get(id)!.stats.moveSpeedMul; // TODO(M2): × slow effect
-    f.x += input.dx * speed * dt;
-    f.y += input.dy * speed * dt;
     if (input.dx !== 0 || input.dy !== 0) f.facing = Math.atan2(input.dy, input.dx);
-    f.x = Math.max(-mx, Math.min(mx, f.x));
-    f.y = Math.max(-my, Math.min(my, f.y));
+    moveFighter(ctx, r, f, f.x + input.dx * speed * dt, f.y + input.dy * speed * dt, geometry);
   }
+
+  // Consume special requests once, including requests rejected by cooldown/status checks.
+  for (const f of fighters.values()) {
+    const input = ctx.db.input.player.find(f.player);
+    if (!input?.abilityBuffered) continue;
+    ctx.db.input.player.update({ ...input, abilityBuffered: false });
+    if (!hasEffect(f, 'frozen', seconds)) activateAbility(ctx, r, f, fighters);
+  }
+
+  const aimGeometry = battleGeometry(ctx, r);
 
   // 2. Attacks (one buffered press, fires when cooldown is ready)
   for (const [id, f] of fighters) {
     const input = ctx.db.input.player.find(f.player);
+    if (f.hp <= 0 || hasEffect(f, 'silenced', seconds) || hasEffect(f, 'frozen', seconds)) {
+      if (input?.attackBuffered) ctx.db.input.player.update({ ...input, attackBuffered: false });
+      continue;
+    }
     if (!input?.attackBuffered || now.microsSinceUnixEpoch < f.cooldownReadyAt.microsSinceUnixEpoch) continue;
     const w = weapons.get(id)!;
-    const target = autoAim(f, fighters);
+    const target = autoAim(ctx, r, f, fighters, aimGeometry);
     if (target) f.facing = Math.atan2(target.y - f.y, target.x - f.x);
     resolveAttack(ctx, r, f, w, fighters, rand);
-    f.cooldownReadyAt = addSeconds(now, w.stats.cooldown);
+    f.cooldownReadyAt = addSeconds(now, w.stats.cooldown / (hasEffect(f, 'rage', seconds) ? ABILITY_TUNING.attackSpeedMultiplier : 1));
     f.lastAttackAt = now;
     ctx.db.input.player.update({ ...input, attackBuffered: false });
   }
 
   // 3. Projectiles — TODO(M2): move, collide, pierce/bounce/split/homing/arc, expire.
-  // 4. Effects (burn/poison DoT, slow, thorns) — TODO(M2): read/write f.effects JSON.
+  stepAbilityObjects(ctx, r, fighters, weapons, dt);
 
   // 5. Storm: shrinks from stormStartS to suddenDeathS, then sudden death ramps damage.
   const stormR = stormRadius(r, elapsed);
   const sdDps = elapsed >= GAME.suddenDeathS
     ? GAME.suddenDeathDpsStart + (elapsed - GAME.suddenDeathS) * GAME.suddenDeathDpsPerS : 0;
   for (const f of fighters.values()) {
-    if (Math.hypot(f.x - r.stormX, f.y - r.stormY) > stormR) f.hp -= GAME.stormDps * dt;
-    f.hp -= sdDps * dt;
+    if (Math.hypot(f.x - r.stormX, f.y - r.stormY) > stormR) damage(f, GAME.stormDps * dt, seconds);
+    damage(f, sdDps * dt, seconds);
   }
 
   // 6. Deaths + write back
@@ -87,10 +102,10 @@ export function stormRadius(r: RoomRow, elapsed: number): number {
 }
 
 /** Nearest enemy within ~90° of facing; else nearest overall. */
-function autoAim(f: FighterRow, all: Map<string, FighterRow>): FighterRow | null {
+function autoAim(ctx: Ctx, r: RoomRow, f: FighterRow, all: Map<string, FighterRow>, geometry: BattleGeometry): FighterRow | null {
   let best: FighterRow | null = null, bestScore = Infinity;
   for (const o of all.values()) {
-    if (o.player.isEqual(f.player)) continue;
+    if (o.player.isEqual(f.player) || o.hp <= 0 || untargetable(ctx, r, o, geometry)) continue;
     const dx = o.x - f.x, dy = o.y - f.y, d = Math.hypot(dx, dy);
     const off = Math.abs(normAngle(Math.atan2(dy, dx) - f.facing));
     const score = d * (off < Math.PI / 2 ? 1 : 2.5);
@@ -102,15 +117,15 @@ function autoAim(f: FighterRow, all: Map<string, FighterRow>): FighterRow | null
 /** M1: every archetype resolves as a swing arc. TODO(M2): per-archetype hitboxes (see README). */
 function resolveAttack(ctx: Ctx, r: RoomRow, f: FighterRow, w: StoredWeapon, all: Map<string, FighterRow>, rand: () => number) {
   emitFx(ctx, r.code, 'attack', f.x, f.y, f.player, f.facing);
-  const reach = w.stats.rangeUnits + GAME.hitRadius;
+  const seconds = timeSeconds(ctx);
+  const range = w.stats.rangeUnits * (hasEffect(f, 'weapon_boost', seconds) ? ABILITY_TUNING.weaponScale : 1);
   const halfArc = (140 / 2) * (Math.PI / 180);
   for (const o of all.values()) {
     if (o.player.isEqual(f.player) || o.hp <= 0) continue;
     const dx = o.x - f.x, dy = o.y - f.y;
-    if (Math.hypot(dx, dy) > reach) continue;
+    if (Math.hypot(dx, dy) > range + hitRadius(o, seconds)) continue;
     if (Math.abs(normAngle(Math.atan2(dy, dx) - f.facing)) > halfArc) continue;
-    const dmg = rollDamage(w.stats.damagePerHit, rand, BALANCE);
-    o.hp -= dmg;
+    const dmg = damage(o, rollDamage(w.stats.damagePerHit, rand, BALANCE) * (hasEffect(f, 'attack_boost', seconds) ? ABILITY_TUNING.attackDamageMultiplier : 1), seconds);
     emitFx(ctx, r.code, 'hit', o.x, o.y, f.player, dmg);
     // TODO(M2): on_hit effects (knockback, burn, slow, chain, lifesteal, pierce).
   }
