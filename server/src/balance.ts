@@ -91,11 +91,13 @@ export const PROJECTILE = {
   throwRadiusPer: 0.12,
   /**
    * A boomerang can hit the same target going out AND coming back, so the per-attack budget is
-   * split across the legs (sums to 1 → a throw that connects both ways = one hit's worth).
-   * Playtest 2026-10-03: at 1 + 1 it was the strongest weapon by far.
+   * split across the legs. It also hits from 4–8 units — outside melee reach — so the two legs
+   * together are worth 0.7 of a hit, not 1 (safety from range is part of its power).
+   * Playtest 2026-10-03: at 1 + 1 it was the strongest weapon by far; at 0.6 + 0.4 it still
+   * landed a full hit every throw from range (~520 DPS in a 1v1).
    */
-  throwOutMul: 0.6,
-  throwBackMul: 0.4,
+  throwOutMul: 0.45,
+  throwBackMul: 0.25,
   /** homing turn rate (rad/s) and how far it looks for a target */
   homingTurn: 4,
   homingRange: 6,

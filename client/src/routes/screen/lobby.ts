@@ -1,22 +1,27 @@
 import QRCode from 'qrcode';
 import { colorForSlot } from '@doodle/spec';
 import type { DbConnection } from '../../module_bindings';
+import { mountTutorial } from './tutorial';
 
 const PUBLIC_URL = import.meta.env.VITE_PUBLIC_URL ?? location.origin;
 
-/** QR + room code + live player list (color + marker) + Start. */
+/** QR + room code + live player list (color + marker) + Start, beside a looping "How to play". */
 export function lobbyOverlay(el: HTMLElement, conn: DbConnection, code: string): () => void {
   const url = `${PUBLIC_URL}/play?room=${code}`;
   el.innerHTML = `
-    <div class="center" style="pointer-events:auto">
-      <div>
-        <canvas id="qr"></canvas>
-        <h1 style="font-size:72px;margin:8px 0;letter-spacing:8px">${code}</h1>
-        <p style="color:var(--muted)">${url}</p>
-        <ul id="players" style="list-style:none;padding:0;display:flex;flex-wrap:wrap;gap:12px;justify-content:center"></ul>
-        <button id="start">Start</button>
+    <div class="center">
+      <div class="lobby">
+        <div class="lobby-join">
+          <canvas id="qr"></canvas>
+          <h1 style="font-size:72px;margin:8px 0;letter-spacing:8px">${code}</h1>
+          <p style="color:var(--muted)">${url}</p>
+          <ul id="players" style="list-style:none;padding:0;display:flex;flex-wrap:wrap;gap:12px;justify-content:center"></ul>
+          <button id="start">Start</button>
+        </div>
+        <div class="lobby-tutorial"></div>
       </div>
     </div>`;
+  const stopTutorial = mountTutorial(el.querySelector<HTMLDivElement>('.lobby-tutorial')!);
   void QRCode.toCanvas(el.querySelector<HTMLCanvasElement>('#qr')!, url, { width: 240, margin: 1 });
 
   const list = el.querySelector<HTMLUListElement>('#players')!;
@@ -36,6 +41,7 @@ export function lobbyOverlay(el: HTMLElement, conn: DbConnection, code: string):
 
   el.querySelector<HTMLButtonElement>('#start')!.onclick = () => void conn.reducers.startRound({}).catch((e: unknown) => alert(String(e)));
   return () => {
+    stopTutorial();
     conn.db.player.removeOnInsert(onIns);
     conn.db.player.removeOnUpdate(onIns);
     conn.db.player.removeOnDelete(onIns);

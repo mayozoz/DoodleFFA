@@ -87,3 +87,57 @@ input, select { font-size: 16px; } /* iOS zooms into inputs smaller than 16px */
 .podium-step .crown { font-size: clamp(34px, 4vw, 56px); animation: crown 1.6s ease-in-out infinite; filter: drop-shadow(0 4px 10px #000a); }
 @keyframes rise { from { transform: translateY(60%); opacity: 0; } }
 @keyframes crown { 0%, 100% { transform: translateY(0) rotate(-6deg); } 50% { transform: translateY(-8px) rotate(6deg); } }
+
+/* ── Lobby layout: join info + "How to play" side by side (stacked on narrow screens) ── */
+.lobby { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: center; gap: clamp(24px, 4vw, 64px);
+  width: min(1200px, 94vw); pointer-events: auto; }
+.lobby-join { display: grid; justify-items: center; text-align: center; }
+@media (max-width: 900px) { .lobby { grid-template-columns: 1fr; } }
+
+/* ── Tutorial: phone-controller clone ── */
+.tutorial { display: grid; justify-items: center; gap: 14px; --t-accent: #2f9bff; }
+.tutorial-title { font-size: clamp(22px, 2.4vw, 34px); font-weight: 900; letter-spacing: 1px; opacity: .9; }
+.phone { width: min(520px, 42vw); aspect-ratio: 19.5 / 9; padding: 12px; border-radius: 34px; background: #0b0a12;
+  box-shadow: 0 0 0 3px #3a3650, 0 18px 50px #000a; }
+@media (max-width: 900px) { .phone { width: min(520px, 88vw); } }
+.phone-screen { position: relative; height: 100%; border-radius: 24px; overflow: hidden; background: var(--bg);
+  display: grid; grid-template-columns: 1fr 1fr; }
+.phone-screen [data-t] { transition: opacity 350ms, filter 350ms; }
+.tutorial[data-step]:not([data-step=""]) .phone-screen [data-t]:not(.t-focus) { opacity: .22; }
+.phone-screen .t-focus { filter: drop-shadow(0 0 10px var(--t-accent)) drop-shadow(0 0 22px color-mix(in srgb, var(--t-accent) 60%, transparent)); }
+/* the ring sits inside the attack frame: keep it lit while the button is focused, and vice versa */
+.tutorial[data-step="atk"] [data-t="ring"], .tutorial[data-step="ring"] [data-t="atk"] { opacity: 1 !important; }
+
+.t-hp { position: absolute; top: 9%; left: 50%; translate: -50%; width: 40%; height: 7%; border-radius: 99px; background: #0006; overflow: hidden; z-index: 2; }
+.t-hp > div { height: 100%; width: 100%; background: var(--t-accent); transform-origin: left; }
+.tutorial[data-step="hp"] .t-hp > div { animation: t-hp 3.6s ease-in-out; }
+@keyframes t-hp { 0% { transform: scaleX(1) } 45% { transform: scaleX(.55) } 60% { transform: scaleX(.55) } 100% { transform: scaleX(.8) } }
+
+.t-stick { position: relative; }
+.t-nipple { position: absolute; left: 32%; top: 52%; width: 34%; aspect-ratio: 1; translate: -50% -50%; border-radius: 50%;
+  background: #ffffff0d; border: 1px solid #ffffff40; opacity: 0; transition: opacity 250ms; }
+.t-knob { position: absolute; left: 50%; top: 50%; width: 48%; aspect-ratio: 1; translate: -50% -50%; border-radius: 50%; background: #ffffff80; }
+.t-finger { position: absolute; left: 32%; top: 52%; width: 9%; aspect-ratio: 1; translate: -50% -50%; border-radius: 50%;
+  background: #fff; opacity: 0; box-shadow: 0 0 0 6px #ffffff33; }
+.tutorial[data-step="stick"] .t-nipple { opacity: 1; }
+.tutorial[data-step="stick"] .t-knob { animation: t-orbit 1.8s ease-in-out .3s infinite; }
+.tutorial[data-step="stick"] .t-finger { opacity: .85; animation: t-orbit-finger 1.8s ease-in-out .3s infinite; }
+@keyframes t-orbit { 0%, 100% { transform: translate(0, 0) } 25% { transform: translate(55%, -20%) } 50% { transform: translate(10%, 50%) } 75% { transform: translate(-50%, -10%) } }
+@keyframes t-orbit-finger { 0%, 100% { transform: translate(0, 0) } 25% { transform: translate(100%, -35%) } 50% { transform: translate(20%, 95%) } 75% { transform: translate(-95%, -20%) } }
+
+.t-attack { display: grid; place-items: center; }
+.t-attack .battle-attack-frame { width: clamp(64px, 9vw, 110px); }
+.t-sword { position: absolute; }
+.tutorial[data-step="atk"] .t-sword { animation: t-tap 900ms ease-out .3s 3; }
+@keyframes t-tap { 0% { transform: scale(1) } 12% { transform: scale(.86); background: #ffffff30 } 30% { transform: scale(1.04) } 100% { transform: scale(1) } }
+.tutorial[data-step="ring"] .t-ring { animation: t-ring 1.5s linear .2s 2; }
+@keyframes t-ring { 0% { stroke-dashoffset: 1 } 100% { stroke-dashoffset: 0 } }
+
+.tutorial-caption { min-height: 4.2em; max-width: min(520px, 88vw); text-align: center; opacity: 0; transform: translateY(6px);
+  transition: opacity 450ms, transform 450ms; }
+.tutorial-caption.in { opacity: 1; transform: none; }
+.tutorial-caption b { display: block; font-size: clamp(20px, 2.2vw, 30px); color: var(--t-accent); }
+.tutorial-caption span { font-size: clamp(15px, 1.5vw, 20px); color: var(--fg); opacity: .9; }
+.tutorial-dots { display: flex; gap: 8px; }
+.tutorial-dots i { width: 8px; height: 8px; border-radius: 50%; background: #ffffff30; transition: background 300ms, transform 300ms; }
+.tutorial-dots i.on { background: var(--t-accent); transform: scale(1.3); }
